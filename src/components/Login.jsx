@@ -1,24 +1,42 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { API_URL } from "../config";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setIsLoading(true);
 
-    if (email === "admin@upse.edu.ec" && password === "123456") {
-      setError("");
-      login(email);
+    try {
+      const response = await fetch(`${API_URL}/api/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Credenciales incorrectas");
+        return;
+      }
+
+      login(data.email);
       navigate("/");
-    } else {
-      setError("Credenciales incorrectas. Usa admin@upse.edu.ec / 123456");
+    } catch (err) {
+      setError("No se pudo conectar con el servidor. Verifica que el backend esté corriendo.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -65,9 +83,10 @@ const Login = () => {
           </div>
           <button
             type="submit"
-            className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition"
+            disabled={isLoading}
+            className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Iniciar Sesión
+            {isLoading ? "Ingresando..." : "Iniciar Sesión"}
           </button>
         </form>
       </div>
