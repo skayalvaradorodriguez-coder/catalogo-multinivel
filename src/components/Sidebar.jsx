@@ -1,12 +1,19 @@
-import { Link } from "react-router-dom";
-import { LayoutDashboard, Grid3x3, Users } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { LayoutDashboard, Grid3x3, Users, Store } from "lucide-react";
+import { useAuth } from "../context/useAuth";
 
 const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
+  const { user } = useAuth();
+  const { pathname } = useLocation();
+
   const links = [
-    { to: "/", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/catalogo", label: "Catálogo", icon: Grid3x3 },
-    { to: "/mi-red", label: "Mi Red", icon: Users },
+    { to: "/", label: "Dashboard", icon: LayoutDashboard, soloAdmin: true },
+    { to: "/tienda", label: "Tienda", icon: Store, soloAdmin: false },
+    { to: "/catalogo", label: "Catálogo", icon: Grid3x3, soloAdmin: false },
+    { to: "/mi-red", label: "Mi Red", icon: Users, soloAdmin: true },
   ];
+
+  const visibles = links.filter((link) => !link.soloAdmin || user?.rol === "admin");
 
   return (
     <aside
@@ -22,23 +29,36 @@ const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
         {isCollapsed && <span className="hidden md:inline">MC</span>}
       </div>
       <nav className="flex-1 p-4 space-y-2">
-        {links.map(({ to, label, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
-            className={`flex items-center gap-3 p-3 rounded hover:bg-teal-600 transition ${
-              isCollapsed ? "md:justify-center" : ""
-            }`}
-            title={isCollapsed ? label : undefined}
-          >
-            <Icon size={20} />
-            <span className={isCollapsed ? "md:hidden" : ""}>{label}</span>
-          </Link>
-        ))}
+        {visibles.map(({ to, label, icon: Icon }) => {
+          const esActivo = to === "/" ? pathname === "/" : pathname.startsWith(to);
+          return (
+            <Link
+              key={to}
+              to={to}
+              onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
+              className={`flex items-center gap-3 p-3 rounded transition ${
+                esActivo ? "bg-teal-900" : "hover:bg-teal-600"
+              } ${isCollapsed ? "md:justify-center" : ""}`}
+              title={isCollapsed ? label : undefined}
+            >
+              <Icon size={20} />
+              <span className={isCollapsed ? "md:hidden" : ""}>{label}</span>
+            </Link>
+          );
+        })}
       </nav>
+      <div className="p-4 border-t border-teal-600 text-xs text-teal-100">
+        {isCollapsed ? (
+          <p className="text-center uppercase">{user?.rol}</p>
+        ) : (
+          <p>
+            Conectado como <span className="font-semibold uppercase">{user?.rol}</span>
+          </p>
+        )}
+      </div>
     </aside>
   );
 };
 
 export default Sidebar;
+

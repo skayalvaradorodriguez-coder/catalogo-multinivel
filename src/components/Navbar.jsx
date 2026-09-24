@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
-import { useCart } from "../context/CartContext";
-import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/useCart";
+import { useAuth } from "../context/useAuth";
 
 const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
   const { totalItems } = useCart();
-  const { logout, userEmail } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
@@ -17,12 +17,10 @@ const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
   };
 
   const handleMenuClick = () => {
-    // En mobile abre/cierra el drawer; en desktop colapsa/expande el sidebar
     setIsMobileOpen((prev) => !prev);
     setIsCollapsed(!isCollapsed);
   };
 
-  // Cierra el menú del perfil al hacer clic/tap fuera de él
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -48,14 +46,11 @@ const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
           <Menu size={20} className="text-slate-600" />
         </button>
         <h2 className="text-slate-600 font-medium text-base sm:text-lg truncate hidden sm:block">
-          Panel de Administración
+          {user?.rol === "admin" ? "Panel de Administración" : "Tienda MultiCatálogo"}
         </h2>
       </div>
       <div className="flex items-center gap-2 sm:gap-6">
-        <Link
-          to="/carrito"
-          className="relative p-2 hover:bg-slate-100 rounded-full transition"
-        >
+        <Link to="/carrito" className="relative p-2 hover:bg-slate-100 rounded-full transition">
           <span className="text-xl">🛒</span>
           {totalItems > 0 && (
             <span className="absolute top-0 right-0 bg-indigo-600 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full transform translate-x-1 -translate-y-1">
@@ -65,7 +60,14 @@ const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
         </Link>
         <div className="flex items-center gap-2 sm:gap-4">
           <span className="text-sm text-slate-500 hidden sm:inline max-w-[140px] truncate">
-            {userEmail}
+            {user?.email}
+          </span>
+          <span
+            className={`hidden md:inline-block text-xs font-semibold px-2 py-1 rounded-full uppercase ${
+              user?.rol === "admin" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"
+            }`}
+          >
+            {user?.rol}
           </span>
           <div className="relative pb-2" ref={profileRef}>
             <button
@@ -99,3 +101,5 @@ const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
 };
 
 export default Navbar;
+
+

@@ -1,63 +1,114 @@
-import { useState, useEffect } from "react";
-import { useCart } from "../context/CartContext";
-import { API_URL } from "../config";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useCart } from "../context/useCart";
+import { getProductos } from "../services/productosService";
+import { categorias } from "../data/productos";
 
 const Catalogo = () => {
   const { addToCart } = useCart();
   const [productos, setProductos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [busqueda, setBusqueda] = useState("");
+  const [categoria, setCategoria] = useState(searchParams.get("categoria") ?? "Todas");
 
   useEffect(() => {
-    const fetchProductos = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/productos`);
-        if (!response.ok) {
-          throw new Error("Error al obtener los productos");
-        }
-        const data = await response.json();
+    getProductos()
+      .then((data) => {
         setProductos(data);
-      } catch (err) {
-        setError("No se pudo cargar el catálogo. Verifica que el backend esté corriendo.");
-      } finally {
         setIsLoading(false);
-      }
-    };
-
-    fetchProductos();
+      })
+      .catch(() => setIsLoading(false));
   }, []);
+
+  const productosFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    return productos.filter((prod) => {
+      const coincideCategoria = categoria === "Todas" || prod.categoria === categoria;
+      const coincideTexto =
+        texto === "" ||
+        prod.nombre.toLowerCase().includes(texto) ||
+        prod.descripcion.toLowerCase().includes(texto);
+      return coincideCategoria && coincideTexto;
+    });
+  }, [productos, busqueda, categoria]);
+
+  const handleCategoriaChange = (valor) => {
+    setCategoria(valor);
+    setSearchParams(valor === "Todas" ? {} : { categoria: valor });
+  };
+
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    setCategoria("Todas");
+    setSearchParams({});
+  };
+
+  if (isLoading) {
+    return <p className="text-slate-500">Cargando catálogo...</p>;
+  }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">
-        Catálogo de Productos
-      </h1>
+      <h1 className="text-2xl font-bold text-slate-800 mb-2">Catálogo de Productos</h1>
+      <p className="text-slate-500 mb-6">
+        {productosFiltrados.length} producto(s) encontrado(s)
+      </p>
 
-      {isLoading && <p className="text-slate-500">Cargando productos...</p>}
+      <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <input
+          type="text"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre o descripción..."
+          className="flex-1 px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition"
+        />
+        <select
+          value={categoria}
+          onChange={(e) => handleCategoriaChange(e.target.value)}
+          className="px-4 py-3 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition"
+        >
+          <option value="Todas">Todas las categorías</option>
+          {categorias.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">
-          {error}
+      {productosFiltrados.length === 0 ? (
+        <div className="bg-white p-10 rounded-lg border border-slate-200 text-center">
+          <p className="text-slate-500">No hay productos que coincidan con tu búsqueda.</p>
+          <button onClick={limpiarFiltros} className="mt-4 text-indigo-600 font-semibold hover:underline">
+            Limpiar filtros
+          </button>
         </div>
-      )}
-
-      {!isLoading && !error && (
+      ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {productos.map((prod) => (
+          {productosFiltrados.map((prod) => (
             <div
               key={prod.id}
               className="bg-white rounded-lg overflow-hidden border border-slate-200 shadow-sm flex flex-col"
             >
-              <img
-                src={prod.img}
-                alt={prod.nombre}
-                className="w-full h-40 object-cover"
-              />
+              <Link to={`/producto/${prod.id}`}>
+                <img
+                  src={prod.img}
+                  alt={prod.nombre}
+                  className="w-full h-40 object-cover hover:opacity-90 transition"
+                />
+              </Link>
               <div className="p-4 flex flex-col flex-1">
-                <h3 className="font-semibold text-slate-700">{prod.nombre}</h3>
-                <p className="text-indigo-600 font-bold mt-2 mb-4">
-                  ${prod.precio.toFixed(2)}
+                <p className="text-xs uppercase tracking-wide text-indigo-500 font-semibold">
+                  {prod.categoria}
                 </p>
+                <Link to={`/producto/${prod.id}`}>
+                  <h3 className="font-semibold text-slate-700 hover:text-indigo-600 transition">
+                    {prod.nombre}
+                  </h3>
+                </Link>
+                <p className="text-indigo-600 font-bold mt-2 mb-4">${prod.precio.toFixed(2)}</p>
                 <button
                   onClick={() => addToCart(prod)}
                   className="mt-auto w-full bg-slate-900 text-white py-2 rounded text-sm hover:bg-indigo-600 transition"
@@ -74,3 +125,4 @@ const Catalogo = () => {
 };
 
 export default Catalogo;
+

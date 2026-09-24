@@ -1,31 +1,29 @@
-import { createContext, useContext, useState } from "react";
-
-const AuthContext = createContext(undefined);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth debe ser usado dentro de un AuthProvider");
-  }
-  return context;
-};
+﻿import { useState } from "react";
+import { AuthContext } from "./AuthContextValue";
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userEmail, setUserEmail] = useState(null);
+  const [user, setUser] = useState(null);
 
-  const login = (email) => {
+  const login = (usuario) => {
     setIsAuthenticated(true);
-    setUserEmail(email);
+    setUser(usuario);
   };
 
   const logout = () => {
     setIsAuthenticated(false);
-    setUserEmail(null);
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, userEmail, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        user,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
