@@ -15,14 +15,26 @@ func Login(c *fiber.Ctx) error {
 
 	// Leer el JSON enviado por el cliente.
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cuerpo de petición inválido",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.NewAPIError(fiber.StatusBadRequest, "Cuerpo de petición inválido", nil))
 	}
 
 	// Limpiar espacios innecesarios.
 	email := strings.TrimSpace(req.Email)
 	password := strings.TrimSpace(req.Password)
+
+	// Validar que email y password no vengan vacíos.
+	if email == "" || password == "" {
+		details := map[string]string{}
+		if email == "" {
+			details["email"] = "El email es obligatorio"
+		}
+		if password == "" {
+			details["password"] = "La contraseña es obligatoria"
+		}
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.NewAPIError(fiber.StatusBadRequest, "Email y contraseña son obligatorios", details))
+	}
 
 	// Validar usuario administrador.
 	if email == "admin@upse.edu.ec" && password == "123456" {
@@ -43,7 +55,6 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	// Si ningún usuario coincide.
-	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-		"error": "Credenciales incorrectas",
-	})
+	return c.Status(fiber.StatusUnauthorized).JSON(
+		models.NewAPIError(fiber.StatusUnauthorized, "Credenciales incorrectas", nil))
 }
