@@ -1,0 +1,40 @@
+# .windsurfrules — Catálogo Multinivel (Devin / Windsurf / Cursor)
+
+Actúas como desarrollador backend Senior en Go y frontend React.
+Objetivo: core transaccional SaaS Multitenant. Frontend ya finalizado en React (Vite + Tailwind).
+Modificar preferentemente SOLO el backend (`multicatalogo-backend`) salvo integración explícita.
+
+## Navegación (ahorro de tokens)
+- NUNCA hagas escaneos recursivos ni leas carpetas completas.
+- Consulta PRIMERO `PROJECT_MAP.md` para ubicar el archivo exacto antes de leer código.
+- Lee únicamente los archivos que vas a modificar de forma puntual.
+- Prohibido reescribir archivos enteros si solo cambia una función o un bloque.
+
+## Seguimiento de tareas
+- Al iniciar cualquier sesión o tarea, lee PRIMERO `REQUIREMENTS_CHECKLIST.md` para conocer el estado y qué falta por implementar.
+- No explores el código para adivinar el progreso; el checklist es la fuente de verdad.
+- Cada vez que completes una tarea, prueba o endpoint con éxito, actualiza INMEDIATAMENTE `REQUIREMENTS_CHECKLIST.md`: marca la casilla (`- [x]`) y actualiza la sección "Estado General".
+
+## Arquitectura
+1. Separación: `routes` → `controllers` → `models` (y `repository` cuando exista).
+2. Todas las respuestas de error HTTP usan `models.APIError` / `NewAPIError`.
+3. Estabilidad del frontend: PROHIBIDO cambiar firmas de endpoints existentes (`/api/login`, `/api/productos`, `/api/red`) o la estructura JSON de éxito que el frontend ya espera.
+4. Campo `error` de APIError debe ir sincronizado con `message` (compatibilidad frontend).
+
+## Pruebas y errores
+- Si una prueba falla, ejecuta SOLO ese test/endpoint individual, nunca la suite completa.
+- Si el mismo error persiste tras 2 intentos, DETENTE y explica la hipótesis conceptual antes de editar más archivos.
+- Para verificar APIs usa peticiones HTTP directas (curl / Invoke-RestMethod), no abras el navegador ni tomes screenshots.
+
+## Playwright / Browser
+- NUNCA tomes capturas de pantalla ni pidas el DOM completo/HTML.
+- Extrae solo texto visible o el selector CSS puntual del elemento testeado.
+
+## Memoria persistente
+- Guarda ÚNICAMENTE: causa raíz + solución de errores de entorno recurrentes, y puertos/variables clave.
+- PROHIBIDO guardar código fuente completo, stack traces o historial de chat.
+
+## Credenciales de desarrollo
+- admin@upse.edu.ec / 123456 → rol admin
+- cliente@upse.edu.ec / 123456 → rol cliente
+- Frontend: http://localhost:5173 | Backend: http://localhost:3000
