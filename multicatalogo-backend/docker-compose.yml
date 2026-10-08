@@ -1,0 +1,28 @@
+# Levanta PostgreSQL 16 para el backend.
+#   Iniciar:   docker compose up -d
+#   Detener:   docker compose down
+#   Reiniciar desde cero (vuelve a ejecutar init.sql): docker compose down -v && docker compose up -d
+services:
+  db:
+    image: postgres:16
+    container_name: multicatalogo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-multicatalogo}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # Datos persistentes entre reinicios del contenedor.
+      - multicatalogo_data:/var/lib/postgresql/data
+      # Se ejecuta UNA sola vez, cuando el volumen está vacío.
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-multicatalogo}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  multicatalogo_data:

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"multicatalogo-backend/models"
+	"multicatalogo-backend/repository"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -36,21 +37,22 @@ func Login(c *fiber.Ctx) error {
 			models.NewAPIError(fiber.StatusBadRequest, "Email y contraseña son obligatorios", details))
 	}
 
-	// Validar usuario administrador.
-	if email == "admin@upse.edu.ec" && password == "123456" {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"token": "fake-jwt-token-123",
-			"email": email,
-			"rol":   "admin",
-		})
+	// Buscar el usuario en PostgreSQL a través del repositorio.
+	usuario, err := repository.BuscarUsuarioPorCredenciales(c.Context(), email, password)
+	if err != nil {
+		return errorInterno(c, err)
 	}
 
-	// Validar usuario cliente.
-	if email == "cliente@upse.edu.ec" && password == "123456" {
+	if usuario != nil {
+		// Token falso por rol (igual que antes) hasta implementar JWT real.
+		token := "fake-jwt-token-456"
+		if usuario.Rol == "admin" {
+			token = "fake-jwt-token-123"
+		}
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"token": "fake-jwt-token-456",
-			"email": email,
-			"rol":   "cliente",
+			"token": token,
+			"email": usuario.Email,
+			"rol":   usuario.Rol,
 		})
 	}
 

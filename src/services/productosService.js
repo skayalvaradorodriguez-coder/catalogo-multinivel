@@ -1,16 +1,18 @@
-// Capa de servicios del catálogo. Hoy devuelve el mock simulando una llamada
-// asíncrona; en la Unidad 2 se cambia el cuerpo por un fetch real sin tocar
-// los componentes que la consumen.
-import { productosMock } from "../data/productos";
+// Capa de servicios del catálogo. Consulta el backend en Go, que a su vez lee
+// los productos desde PostgreSQL. Los componentes no cambian: siguen recibiendo
+// una promesa con los mismos campos que tenía el mock.
+import { API_URL } from "../config";
 
-export const getProductos = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(productosMock), 400);
-  });
+export const getProductos = async () => {
+  const response = await fetch(`${API_URL}/api/productos`);
+  if (!response.ok) throw new Error("No se pudo cargar el catálogo");
+  return response.json();
 };
 
-export const getProductoById = (id) => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(productosMock.find((p) => p.id === id)), 300);
-  });
+export const getProductoById = async (id) => {
+  const response = await fetch(`${API_URL}/api/productos/${id}`);
+  // 404 = el producto no existe: devolvemos undefined, igual que hacía el mock.
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error("No se pudo cargar el producto");
+  return response.json();
 };
