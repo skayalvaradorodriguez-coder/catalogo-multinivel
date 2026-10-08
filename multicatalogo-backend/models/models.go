@@ -8,10 +8,32 @@ type LoginRequest struct {
 
 // Producto representa un producto del catálogo.
 type Producto struct {
-	ID     int     `json:"id"`
-	Nombre string  `json:"nombre"`
-	Precio float64 `json:"precio"`
-	Img    string  `json:"img"`
+	ID          int      `json:"id" db:"id"`
+	Nombre      string   `json:"nombre" db:"nombre"`
+	Descripcion string   `json:"descripcion" db:"descripcion"`
+	Precio      float64  `json:"precio" db:"precio"`
+	Categoria   string   `json:"categoria" db:"categoria"`
+	Img         string   `json:"img" db:"img"`
+	Galeria     []string `json:"galeria" db:"galeria"`
+}
+
+// Usuario representa una fila de la tabla usuarios.
+// Password lleva json:"-" para que nunca se envíe al cliente.
+type Usuario struct {
+	ID       int    `json:"id" db:"id"`
+	Email    string `json:"email" db:"email"`
+	Password string `json:"-" db:"password"`
+	Rol      string `json:"rol" db:"rol"`
+}
+
+// Referido es un nodo de la red multinivel. Hijos se arma en el repositorio
+// a partir de parent_id; se omite del JSON cuando el nodo no tiene hijos.
+type Referido struct {
+	ID     int         `json:"id" db:"id"`
+	Nombre string      `json:"nombre" db:"nombre"`
+	Nivel  int         `json:"nivel" db:"nivel"`
+	Ventas float64     `json:"ventas" db:"ventas"`
+	Hijos  []*Referido `json:"hijos,omitempty" db:"-"`
 }
 
 // APIError estandariza los mensajes de error HTTP de la API.

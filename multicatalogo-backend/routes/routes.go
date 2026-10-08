@@ -19,6 +19,9 @@ func SetupRoutes(app *fiber.App) {
 	// Producto individual por ID.
 	app.Get("/api/productos/:id", controllers.GetProductoPorID)
 
+	// Red multinivel de referidos (árbol jerárquico).
+	app.Get("/api/red", controllers.GetRed)
+
 	// Verificación de estado del servidor.
 	app.Get("/api/health", controllers.Health)
 }

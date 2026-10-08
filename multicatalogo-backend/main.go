@@ -2,16 +2,30 @@
 package main
 
 import (
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+
 	// Importamos el framework principal Fiber.
 	"github.com/gofiber/fiber/v2"
 	// Importamos el middleware CORS para gestionar la seguridad entre distintos puertos/dominios.
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	// Importamos nuestro propio paquete de rutas para delegarle la configuración de los endpoints.
 	"multicatalogo-backend/routes"
+	// Importamos config para abrir y cerrar el pool de conexiones a PostgreSQL.
+	"multicatalogo-backend/config"
 )
 
 // func main es el punto de entrada de la aplicación en Go. Todo comienza a ejecutarse aquí.
 func main() {
+	// Conectamos a PostgreSQL antes de aceptar peticiones; si falla, no tiene sentido arrancar.
+	if err := config.ConectarDB(); err != nil {
+		log.Fatal(err)
+	}
+	// Cerramos el pool cuando main termine (después del apagado ordenado de más abajo).
+	defer config.CerrarDB()
+
 	// Instanciamos una nueva aplicación de Fiber y la guardamos en la variable 'app'.
 	app := fiber.New()
 
@@ -26,8 +40,20 @@ func main() {
 	// Llamamos a la función SetupRoutes de nuestro paquete 'routes', enviándole la instancia de nuestra 'app'.
 	routes.SetupRoutes(app)
 
+	// Al presionar Ctrl+C apagamos Fiber de forma ordenada para que Listen retorne
+	// y se ejecute el defer que cierra la conexión a la base de datos.
+	go func() {
+		senal := make(chan os.Signal, 1)
+		signal.Notify(senal, os.Interrupt, syscall.SIGTERM)
+		<-senal
+		log.Println("Apagando servidor...")
+		_ = app.Shutdown()
+	}()
+
 	// Ponemos a la aplicación a escuchar peticiones en el puerto 3000 de la máquina local. (Bloquea el hilo de ejecución).
-	app.Listen(":3000")
+	if err := app.Listen(":3000"); err != nil {
+		log.Println("Servidor detenido:", err)
+	}
 }
 
 

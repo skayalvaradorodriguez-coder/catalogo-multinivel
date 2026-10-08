@@ -1,10 +1,10 @@
 # REQUIREMENTS_CHECKLIST — Catálogo Multinivel
 
 ## Estado General
-- **Hito actual:** Unidad 2 — Backend robusto (post Fase 1)
-- **Última tarea completada:** Fase 1 — APIError, validaciones Login, GetProductoPorID, /api/health
-- **Siguiente tarea pendiente:** Capa repository + preparación persistencia relacional
-- **Actualizado:** 2026-10-02
+- **Hito actual:** Unidad 2 — Persistencia PostgreSQL (post Fase 2)
+- **Última tarea completada:** Fase 2 — PostgreSQL (Docker), config/db.go, init.sql, repository, /api/red
+- **Siguiente tarea pendiente:** MiRed.jsx contra /api/red y errores estructurados en Login.jsx
+- **Actualizado:** 2026-10-08
 
 ---
 
@@ -35,18 +35,20 @@
 - [x] Rutas registradas en routes.go sin romper firmas existentes
 - [x] Respuestas de éxito de login/productos intactas para el frontend
 
-## Hito 3 — Backend Fase 2: Repositorio y persistencia (PENDIENTE)
-- [ ] Crear capa `repository/` (interfaz + implementación en memoria)
-- [ ] Mover listaProductos() al repositorio
-- [ ] Inyectar repositorio en controllers (sin romper firmas HTTP)
-- [ ] Preparar modelos para DB relacional (tags sql/json)
-- [ ] Endpoint /api/red (red multinivel) si aplica al sílabo
-- [ ] Persistencia real (SQLite/Postgres) según guía práctica
+## Hito 3 — Backend Fase 2: Repositorio y persistencia PostgreSQL — COMPLETADO
+- [x] `docker-compose.yml` con PostgreSQL 16 (base `multicatalogo`)
+- [x] `config/db.go`: pool pgx, variables desde `.env`, cierre al apagar
+- [x] `database/init.sql`: tablas usuarios, productos, referidos + datos semilla
+- [x] Capa `repository/repository.go` con SQL (sin datos en memoria)
+- [x] Controllers usan el repositorio (firmas HTTP intactas)
+- [x] Modelos con tags json/db (Producto ampliado, Usuario, Referido)
+- [x] Endpoint GET /api/red (árbol armado desde parent_id)
 
 ## Hito 4 — Integración Frontend ↔ Backend real
-- [ ] productosService.js: reemplazar mock por fetch a /api/productos
+- [x] productosService.js: reemplazar mock por fetch a /api/productos
 - [ ] Login.jsx: consumir errores estructurados (data.error / data.message)
-- [ ] DetalleProducto: usar GET /api/productos/:id
+- [x] DetalleProducto: usar GET /api/productos/:id
+- [ ] MiRed.jsx: consumir GET /api/red en lugar de data/red.js
 - [ ] Manejo de estados de carga y error en UI
 
 ## Hito 5 — Calidad y cierre
