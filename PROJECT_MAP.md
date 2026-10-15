@@ -9,6 +9,7 @@
 | Backend | Go + Fiber v2 | 3000 |
 | Auth | Fake JWT en memoria (admin/cliente) | — |
 | Datos | PostgreSQL 16 en Docker (pgx) | 5432 |
+| Caché | Redis (go-redis v9), patrón Cache-Aside | 6379 |
 
 ## Estructura raíz
 catalogo-multinivel/
@@ -27,10 +28,12 @@ catalogo-multinivel/
 │   │   ├── Checkout.jsx
 │   │   ├── Confirmacion.jsx
 │   │   ├── Layout.jsx / Navbar.jsx / Sidebar.jsx
+│   ├── hooks/useRed.js           # Carga /api/red?email= del usuario
 │   ├── context/
 │   │   ├── AuthContext.jsx       # isAuthenticated, user.rol
 │   │   └── CartContext.jsx       # Carrito por email (localStorage)
 │   ├── services/
+│   │   ├── redService.js         # getRed(email)
 │   │   └── productosService.js   # getProductos / getProductoById (fetch al backend)
 │   └── data/
 │       ├── productos.js          # Mock productos
@@ -38,9 +41,12 @@ catalogo-multinivel/
 ├── multicatalogo-backend/        # BACKEND (Unidad 2)
 │   ├── main.go                   # ConectarDB + Fiber + CORS → SetupRoutes
 │   ├── go.mod
-│   ├── docker-compose.yml        # PostgreSQL 16
+│   ├── docker-compose.yml        # PostgreSQL 16 + Redis + backend
+│   ├── Dockerfile                # Imagen del backend
 │   ├── .env / .env.example       # DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 │   ├── config/db.go              # Pool pgx (config.DB), ConectarDB, CerrarDB
+│   ├── config/redis.go           # Cliente Redis (config.Redis), ConectarRedis, CerrarRedis
+│   ├── cache/cache.go            # Obtener/Guardar en Redis, claves y TTL
 │   ├── database/init.sql         # Tablas + datos semilla
 │   ├── repository/repository.go  # Todo el SQL: usuarios, productos, red
 │   ├── models/models.go          # LoginRequest, Producto, Usuario, Referido, APIError
@@ -68,6 +74,6 @@ text## Endpoints API (no cambiar firmas)
 - cliente@upse.edu.ec / 123456 → rol: cliente
 
 ## Reglas arquitectónicas
-1. routes → controllers → repository → PostgreSQL (models compartidos)
+1. routes → controllers → cache (Redis) → repository → PostgreSQL (models compartidos)
 2. Respuestas de error = `APIError` (status, message, error, details)
 3. Frontend NO debe romperse: mismas firmas JSON de éxito

@@ -6,17 +6,33 @@ import (
 
 	// Importamos Fiber para manejar la respuesta HTTP.
 	"github.com/gofiber/fiber/v2"
-	// Importamos modelos (APIError) y el repositorio, que es quien consulta PostgreSQL.
+	// Importamos la caché (Redis), los modelos y el repositorio, que es quien consulta PostgreSQL.
+	"multicatalogo-backend/cache"
 	"multicatalogo-backend/models"
 	"multicatalogo-backend/repository"
 )
 
 // GetProductos es la función controladora encargada de devolver el catálogo de artículos.
+// Usa el patrón Cache-Aside: primero Redis y, solo si no está, PostgreSQL.
 func GetProductos(c *fiber.Ctx) error {
-	productos, err := repository.ObtenerProductos(c.Context())
+	ctx := c.Context()
+
+	// 1. Intentamos leer el catálogo desde Redis.
+	var productos []models.Producto
+	if cache.Obtener(ctx, cache.ClaveProductos, &productos) {
+		// 2. Cache Hit: respondemos sin tocar PostgreSQL.
+		c.Set("X-Cache", "HIT")
+		return c.JSON(productos)
+	}
+
+	// 3. Cache Miss: consultamos PostgreSQL y guardamos el resultado por 5 minutos.
+	productos, err := repository.ObtenerProductos(ctx)
 	if err != nil {
 		return errorInterno(c, err)
 	}
+	cache.Guardar(ctx, cache.ClaveProductos, productos, cache.TTLProductos)
+
+	c.Set("X-Cache", "MISS")
 	return c.JSON(productos)
 }
 

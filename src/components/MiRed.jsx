@@ -1,5 +1,6 @@
+import { useRed } from "../hooks/useRed";
+import MensajeError from "./MensajeError";
 import {
-  redInicial,
   contarRed,
   sumarVentasRed,
   sumarComisiones,
@@ -54,10 +55,16 @@ const NodoReferido = ({ nodo }) => {
 };
 
 const MiRed = () => {
-  const referidosActivos = contarRed(redInicial);
-  const ventasRed = sumarVentasRed(redInicial);
-  const comisionesMes = sumarComisiones(redInicial);
-  const nivel = nivelAlcanzado(redInicial.hijos?.length ?? 0);
+  // La red llega desde GET /api/red (Redis o PostgreSQL), ya no desde el mock.
+  const { red, isLoading, error } = useRed();
+
+  if (isLoading) return <p className="text-slate-500">Cargando tu red...</p>;
+  if (error) return <MensajeError mensaje={error} />;
+
+  const referidosActivos = contarRed(red);
+  const ventasRed = sumarVentasRed(red);
+  const comisionesMes = sumarComisiones(red);
+  const nivel = nivelAlcanzado(red.hijos?.length ?? 0);
 
   const resumen = [
     { etiqueta: "Referidos Activos", valor: referidosActivos.toString(), color: "text-indigo-600" },
@@ -89,10 +96,10 @@ const MiRed = () => {
         <div className="bg-slate-900 text-white rounded-lg p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center font-bold">
-              {redInicial.nombre.charAt(0)}
+              {red.nombre.charAt(0)}
             </div>
             <div>
-              <p className="font-semibold">{redInicial.nombre}</p>
+              <p className="font-semibold">{red.nombre}</p>
               <p className="text-xs text-slate-300">Nivel alcanzado: {nivel}</p>
             </div>
           </div>
@@ -100,7 +107,7 @@ const MiRed = () => {
         </div>
 
         <ul className="space-y-3">
-          {redInicial.hijos?.map((hijo) => (
+          {red.hijos?.map((hijo) => (
             <NodoReferido key={hijo.id} nodo={hijo} />
           ))}
         </ul>

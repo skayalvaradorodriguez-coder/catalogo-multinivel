@@ -26,6 +26,10 @@ func main() {
 	// Cerramos el pool cuando main termine (después del apagado ordenado de más abajo).
 	defer config.CerrarDB()
 
+	// Conectamos a Redis (caché). Si no está disponible, la API sigue funcionando sin caché.
+	config.ConectarRedis()
+	defer config.CerrarRedis()
+
 	// Instanciamos una nueva aplicación de Fiber y la guardamos en la variable 'app'.
 	app := fiber.New()
 
@@ -35,6 +39,8 @@ func main() {
 		AllowOrigins: "http://localhost:5173, http://127.0.0.1:5173, http://172.17.82.108:5173",
 		// Declaramos de forma explícita qué cabeceras (Headers) se permitirán en la comunicación.
 		AllowHeaders: "Origin, Content-Type, Accept",
+		// Dejamos que el navegador lea la cabecera X-Cache (HIT / MISS) en la pestaña Network.
+		ExposeHeaders: "X-Cache",
 	}))
 
 	// Llamamos a la función SetupRoutes de nuestro paquete 'routes', enviándole la instancia de nuestra 'app'.

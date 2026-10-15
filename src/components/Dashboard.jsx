@@ -1,5 +1,6 @@
+import { useRed } from "../hooks/useRed";
+import MensajeError from "./MensajeError";
 import {
-  redInicial,
   contarRed,
   sumarVentasRed,
   sumarComisiones,
@@ -8,10 +9,16 @@ import {
 } from "../data/red";
 
 const Dashboard = () => {
-  const referidosDirectos = redInicial.hijos?.length ?? 0;
-  const referidosActivos = contarRed(redInicial);
-  const ventasRed = sumarVentasRed(redInicial);
-  const comisionesMes = sumarComisiones(redInicial);
+  // La red llega desde GET /api/red (Redis o PostgreSQL), ya no desde el mock.
+  const { red, isLoading, error } = useRed();
+
+  if (isLoading) return <p className="text-slate-500">Cargando resumen...</p>;
+  if (error) return <MensajeError mensaje={error} />;
+
+  const referidosDirectos = red.hijos?.length ?? 0;
+  const referidosActivos = contarRed(red);
+  const ventasRed = sumarVentasRed(red);
+  const comisionesMes = sumarComisiones(red);
   const nivel = nivelAlcanzado(referidosDirectos);
 
   const kpis = [
@@ -21,7 +28,7 @@ const Dashboard = () => {
     { etiqueta: "Nivel Actual", valor: nivel, color: "text-amber-600" },
   ];
 
-  const topReferidos = [...(redInicial.hijos ?? [])].sort((a, b) => b.ventas - a.ventas).slice(0, 3);
+  const topReferidos = [...(red.hijos ?? [])].sort((a, b) => b.ventas - a.ventas).slice(0, 3);
 
   return (
     <div>

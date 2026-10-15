@@ -1,7 +1,7 @@
-# Levanta PostgreSQL 16 para el backend.
-#   Iniciar:   docker compose up -d
-#   Detener:   docker compose down
-#   Reiniciar desde cero (vuelve a ejecutar init.sql): docker compose down -v && docker compose up -d
+# Levanta PostgreSQL 16, Redis y el backend en Go.
+#   Iniciar todo:  docker compose up -d --build
+#   Detener:       docker compose down
+#   Reiniciar la base desde cero (vuelve a ejecutar init.sql): docker compose down -v && docker compose up -d --build
 services:
   db:
     image: postgres:16
@@ -23,6 +23,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Fase 3: caché en memoria para las consultas de lectura recurrentes.
+  redis:
+    image: redis:alpine
+    container_name: multicatalogo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Backend en Go: arranca solo cuando PostgreSQL y Redis están listos.
+  backend:
+    build: .
+    container_name: multicatalogo-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Dentro de la red de Docker los servicios se llaman por su nombre, no por localhost.
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-multicatalogo}
+      REDIS_ADDR: redis:6379
+    ports:
+      - "3000:3000"
 
 volumes:
   multicatalogo_data:

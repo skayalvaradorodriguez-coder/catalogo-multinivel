@@ -1,10 +1,10 @@
 # REQUIREMENTS_CHECKLIST — Catálogo Multinivel
 
 ## Estado General
-- **Hito actual:** Unidad 2 — Persistencia PostgreSQL (post Fase 2)
-- **Última tarea completada:** Fase 2 — PostgreSQL (Docker), config/db.go, init.sql, repository, /api/red
-- **Siguiente tarea pendiente:** MiRed.jsx contra /api/red y errores estructurados en Login.jsx
-- **Actualizado:** 2026-10-08
+- **Hito actual:** Unidad 2 — Caché con Redis (post Fase 3)
+- **Última tarea completada:** Fase 3 — Redis, Cache-Aside en /api/productos y /api/red
+- **Siguiente tarea pendiente:** Según la Fase 4 del profesor
+- **Actualizado:** 2026-10-15
 
 ---
 
@@ -44,11 +44,19 @@
 - [x] Modelos con tags json/db (Producto ampliado, Usuario, Referido)
 - [x] Endpoint GET /api/red (árbol armado desde parent_id)
 
+## Hito 3b — Backend Fase 3: Caché con Redis — COMPLETADO
+- [x] `docker-compose.yml`: servicio `redis:alpine` (6379) y `backend` que depende de db y redis
+- [x] `config/redis.go`: cliente go-redis v9 desde REDIS_URL o REDIS_ADDR (.env)
+- [x] Cache-Aside en GetProductos: clave `productos:all`, TTL 5 min
+- [x] Cache-Aside en GetRed: clave `red:tree:{email}`, TTL 10 min
+- [x] Cabecera `X-Cache: HIT|MISS` para verlo en la pestaña Network
+- [x] Si Redis no está disponible, la API sigue respondiendo desde PostgreSQL
+
 ## Hito 4 — Integración Frontend ↔ Backend real
 - [x] productosService.js: reemplazar mock por fetch a /api/productos
 - [ ] Login.jsx: consumir errores estructurados (data.error / data.message)
 - [x] DetalleProducto: usar GET /api/productos/:id
-- [ ] MiRed.jsx: consumir GET /api/red en lugar de data/red.js
+- [x] MiRed.jsx y Dashboard.jsx: consumir GET /api/red?email= (hook useRed)
 - [ ] Manejo de estados de carga y error en UI
 
 ## Hito 5 — Calidad y cierre
