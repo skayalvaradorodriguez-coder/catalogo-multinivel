@@ -1,5 +1,5 @@
-// Package cache implementa las operaciones del patrón Cache-Aside sobre Redis.
-// Si Redis no está disponible, Obtener siempre reporta "miss" y Guardar no hace nada,
+// Package cache define el contrato de la caché (CacheRepository) y su implementación con Redis.
+// Si Redis no está disponible, Obtener siempre reporta "miss" y Guardar/Eliminar no hacen nada,
 // así la API sigue respondiendo desde PostgreSQL.
 package cache
 
@@ -9,8 +9,6 @@ import (
 	"errors"
 	"log"
 	"time"
-
-	"multicatalogo-backend/config"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -24,14 +22,38 @@ const (
 	TTLRed     = 10 * time.Minute
 )
 
-// Obtener busca la clave en Redis y deserializa el JSON en destino.
-// Devuelve true solo en un Cache Hit.
-func Obtener(ctx context.Context, clave string, destino interface{}) bool {
-	if config.Redis == nil {
+// ClaveRed arma la clave del árbol de un usuario: red:tree:{email}.
+func ClaveRed(email string) string {
+	return PrefijoRed + email
+}
+
+// CacheRepository es el contrato que usan los controladores.
+// Gracias a la interfaz, en una prueba se puede inyectar una caché falsa en memoria.
+type CacheRepository interface {
+	// Obtener deserializa el JSON guardado en destino. Devuelve true solo en un Cache Hit.
+	Obtener(ctx context.Context, clave string, destino interface{}) bool
+	// Guardar serializa valor a JSON y lo almacena con el TTL indicado.
+	Guardar(ctx context.Context, clave string, valor interface{}, ttl time.Duration)
+	// Eliminar borra una o varias claves (invalidación de caché).
+	Eliminar(ctx context.Context, claves ...string)
+}
+
+// RedisCache implementa CacheRepository sobre un cliente de Redis.
+type RedisCache struct {
+	cliente *redis.Client // nil = sin caché
+}
+
+// NuevaRedisCache crea la caché. Acepta un cliente nil (Redis no disponible).
+func NuevaRedisCache(cliente *redis.Client) *RedisCache {
+	return &RedisCache{cliente: cliente}
+}
+
+func (r *RedisCache) Obtener(ctx context.Context, clave string, destino interface{}) bool {
+	if r.cliente == nil {
 		return false
 	}
 
-	datos, err := config.Redis.Get(ctx, clave).Bytes()
+	datos, err := r.cliente.Get(ctx, clave).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return false // la clave no existe o ya expiró
 	}
@@ -47,9 +69,8 @@ func Obtener(ctx context.Context, clave string, destino interface{}) bool {
 	return true
 }
 
-// Guardar serializa valor a JSON y lo almacena en Redis con el TTL indicado.
-func Guardar(ctx context.Context, clave string, valor interface{}, ttl time.Duration) {
-	if config.Redis == nil {
+func (r *RedisCache) Guardar(ctx context.Context, clave string, valor interface{}, ttl time.Duration) {
+	if r.cliente == nil {
 		return
 	}
 
@@ -59,7 +80,24 @@ func Guardar(ctx context.Context, clave string, valor interface{}, ttl time.Dura
 		return
 	}
 
-	if err := config.Redis.Set(ctx, clave, datos, ttl).Err(); err != nil {
+	if err := r.cliente.Set(ctx, clave, datos, ttl).Err(); err != nil {
 		log.Printf("Aviso: no se pudo guardar %q en Redis: %v", clave, err)
+	}
+}
+
+func (r *RedisCache) Eliminar(ctx context.Context, claves ...string) {
+	if r.cliente == nil || len(claves) == 0 {
+		return
+	}
+	if err := r.cliente.Del(ctx, claves...).Err(); err != nil {
+		log.Printf("Aviso: no se pudieron eliminar %v de Redis: %v", claves, err)
+	}
+}
+
+// Cerrar libera las conexiones del cliente.
+func (r *RedisCache) Cerrar() {
+	if r.cliente != nil {
+		_ = r.cliente.Close()
+		log.Println("Conexión a Redis cerrada")
 	}
 }

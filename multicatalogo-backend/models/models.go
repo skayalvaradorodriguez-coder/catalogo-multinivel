@@ -15,6 +15,7 @@ type Producto struct {
 	Categoria   string   `json:"categoria" db:"categoria"`
 	Img         string   `json:"img" db:"img"`
 	Galeria     []string `json:"galeria" db:"galeria"`
+	Stock       int      `json:"stock" db:"stock"`
 }
 
 // Usuario representa una fila de la tabla usuarios.
@@ -29,11 +30,13 @@ type Usuario struct {
 // Referido es un nodo de la red multinivel. Hijos se arma en el repositorio
 // a partir de parent_id; se omite del JSON cuando el nodo no tiene hijos.
 type Referido struct {
-	ID     int         `json:"id" db:"id"`
-	Nombre string      `json:"nombre" db:"nombre"`
-	Nivel  int         `json:"nivel" db:"nivel"`
-	Ventas float64     `json:"ventas" db:"ventas"`
-	Hijos  []*Referido `json:"hijos,omitempty" db:"-"`
+	ID     int     `json:"id" db:"id"`
+	Nombre string  `json:"nombre" db:"nombre"`
+	Nivel  int     `json:"nivel" db:"nivel"`
+	Ventas float64 `json:"ventas" db:"ventas"`
+	// Comisiones es el saldo acumulado que la goroutine de la Fase 4 suma a este referido.
+	Comisiones float64     `json:"comisiones" db:"comisiones"`
+	Hijos      []*Referido `json:"hijos,omitempty" db:"-"`
 }
 
 // APIError estandariza los mensajes de error HTTP de la API.

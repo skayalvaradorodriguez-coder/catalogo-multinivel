@@ -1,9 +1,9 @@
 # REQUIREMENTS_CHECKLIST — Catálogo Multinivel
 
 ## Estado General
-- **Hito actual:** Unidad 2 — Caché con Redis (post Fase 3)
-- **Última tarea completada:** Fase 3 — Redis, Cache-Aside en /api/productos y /api/red
-- **Siguiente tarea pendiente:** Según la Fase 4 del profesor
+- **Hito actual:** Unidad 2 — cerrada (post Fase 4)
+- **Última tarea completada:** Fase 4 — DI, checkout ACID, goroutine de comisiones, invalidación de caché
+- **Siguiente tarea pendiente:** Según la siguiente fase del profesor
 - **Actualizado:** 2026-10-15
 
 ---
@@ -51,6 +51,16 @@
 - [x] Cache-Aside en GetRed: clave `red:tree:{email}`, TTL 10 min
 - [x] Cabecera `X-Cache: HIT|MISS` para verlo en la pestaña Network
 - [x] Si Redis no está disponible, la API sigue respondiendo desde PostgreSQL
+
+## Hito 3c — Backend Fase 4: Checkout transaccional — COMPLETADO
+- [x] Inyección de dependencias: interfaces `DBRepository` y `CacheRepository`, controladores como structs, armado en `main.go`
+- [x] Sin variables globales de conexión (`config.ConectarDB` / `ConectarRedis` devuelven la conexión)
+- [x] `POST /api/checkout` recibe el JSON de `Checkout.jsx` (cliente, método de pago, items)
+- [x] Transacción ACID: `pedidos` + `pedido_items` + resta de stock; ROLLBACK ante error (400 datos / 500 infraestructura)
+- [x] Goroutine de comisiones: 10% / 5% / 2% a los niveles ascendentes 1, 2 y 3 (tabla `comisiones`)
+- [x] Invalidación de caché: `red:tree:{email}` del comprador y sus ascendentes, y `productos:all`
+- [x] `database/fase4.sql` (migración) y `init.sql` actualizado
+- [x] Simulación de fallas: `SIMULAR_FALLA_CHECKOUT` y `CHECKOUT_PAUSA_SEGUNDOS` en `.env`
 
 ## Hito 4 — Integración Frontend ↔ Backend real
 - [x] productosService.js: reemplazar mock por fetch a /api/productos

@@ -34,6 +34,7 @@ catalogo-multinivel/
 │   │   └── CartContext.jsx       # Carrito por email (localStorage)
 │   ├── services/
 │   │   ├── redService.js         # getRed(email)
+│   │   ├── checkoutService.js    # enviarPedido → POST /api/checkout
 │   │   └── productosService.js   # getProductos / getProductoById (fetch al backend)
 │   └── data/
 │       ├── productos.js          # Mock productos
@@ -44,16 +45,19 @@ catalogo-multinivel/
 │   ├── docker-compose.yml        # PostgreSQL 16 + Redis + backend
 │   ├── Dockerfile                # Imagen del backend
 │   ├── .env / .env.example       # DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
-│   ├── config/db.go              # Pool pgx (config.DB), ConectarDB, CerrarDB
-│   ├── config/redis.go           # Cliente Redis (config.Redis), ConectarRedis, CerrarRedis
-│   ├── cache/cache.go            # Obtener/Guardar en Redis, claves y TTL
-│   ├── database/init.sql         # Tablas + datos semilla
-│   ├── repository/repository.go  # Todo el SQL: usuarios, productos, red
+│   ├── config/db.go              # CargarEnv, ConectarDB → *pgxpool.Pool
+│   ├── config/redis.go           # ConectarRedis → *redis.Client (nil = sin caché)
+│   ├── cache/cache.go            # Interfaz CacheRepository + RedisCache, claves y TTL
+│   ├── database/init.sql         # Tablas + datos semilla (incluye Fase 4)
+│   ├── database/fase4.sql        # Migración Fase 4: stock, pedidos, pedido_items, comisiones
+│   ├── repository/repository.go  # Interfaz DBRepository + PostgresRepository
+│   ├── repository/pedidos.go     # CrearPedido (transacción ACID), CalcularComisiones
 │   ├── models/models.go          # LoginRequest, Producto, Usuario, Referido, APIError
 │   ├── controllers/
 │   │   ├── authController.go     # Login + validación campos vacíos
 │   │   ├── prodController.go     # GetProductos, GetProductoPorID
-│   │   ├── redController.go      # GetRed
+│   │   ├── redController.go      # RedController.GetRed
+│   │   ├── checkoutController.go # CheckoutController.Checkout + goroutine de comisiones
 │   │   ├── errores.go            # errorInterno (500)
 │   │   └── healthController.go   # GET /api/health
 │   └── routes/routes.go          # Registro de endpoints
@@ -66,7 +70,8 @@ text## Endpoints API (no cambiar firmas)
 | POST | `/api/login` | authController.Login |
 | GET | `/api/productos` | prodController.GetProductos |
 | GET | `/api/productos/:id` | prodController.GetProductoPorID |
-| GET | `/api/red` | redController.GetRed |
+| GET | `/api/red` | RedController.GetRed |
+| POST | `/api/checkout` | CheckoutController.Checkout |
 | GET | `/api/health` | healthController.Health |
 
 ## Credenciales de prueba
@@ -74,6 +79,6 @@ text## Endpoints API (no cambiar firmas)
 - cliente@upse.edu.ec / 123456 → rol: cliente
 
 ## Reglas arquitectónicas
-1. routes → controllers → cache (Redis) → repository → PostgreSQL (models compartidos)
+1. main.go arma las dependencias → routes → controllers (structs) → interfaces CacheRepository / DBRepository
 2. Respuestas de error = `APIError` (status, message, error, details)
 3. Frontend NO debe romperse: mismas firmas JSON de éxito

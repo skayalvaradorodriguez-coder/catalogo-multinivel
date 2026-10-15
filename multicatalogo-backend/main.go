@@ -6,29 +6,58 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	// Importamos el framework principal Fiber.
 	"github.com/gofiber/fiber/v2"
 	// Importamos el middleware CORS para gestionar la seguridad entre distintos puertos/dominios.
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	// Importamos nuestro propio paquete de rutas para delegarle la configuración de los endpoints.
-	"multicatalogo-backend/routes"
-	// Importamos config para abrir y cerrar el pool de conexiones a PostgreSQL.
+
+	"multicatalogo-backend/cache"
 	"multicatalogo-backend/config"
+	"multicatalogo-backend/controllers"
+	"multicatalogo-backend/repository"
+	"multicatalogo-backend/routes"
 )
 
 // func main es el punto de entrada de la aplicación en Go. Todo comienza a ejecutarse aquí.
+// Aquí se construyen las dependencias UNA sola vez y se inyectan hacia abajo:
+// conexiones → repositorio y caché → controladores → rutas.
 func main() {
-	// Conectamos a PostgreSQL antes de aceptar peticiones; si falla, no tiene sentido arrancar.
-	if err := config.ConectarDB(); err != nil {
+	config.CargarEnv()
+
+	// 1. Infraestructura. Si PostgreSQL falla, no tiene sentido arrancar.
+	pool, err := config.ConectarDB()
+	if err != nil {
 		log.Fatal(err)
 	}
-	// Cerramos el pool cuando main termine (después del apagado ordenado de más abajo).
-	defer config.CerrarDB()
+	defer func() {
+		pool.Close()
+		log.Println("Conexión a PostgreSQL cerrada")
+	}()
 
-	// Conectamos a Redis (caché). Si no está disponible, la API sigue funcionando sin caché.
-	config.ConectarRedis()
-	defer config.CerrarRedis()
+	// Redis es opcional: si no está disponible, la caché queda desactivada.
+	redisCache := cache.NuevaRedisCache(config.ConectarRedis())
+	defer redisCache.Cerrar()
+
+	// 2. Capa de datos. Las opciones permiten simular fallas del checkout en clase (ver .env).
+	opciones := repository.OpcionesCheckout{
+		SimularFalla: config.GetEnvBool("SIMULAR_FALLA_CHECKOUT"),
+		Pausa:        time.Duration(config.GetEnvInt("CHECKOUT_PAUSA_SEGUNDOS", 0)) * time.Second,
+	}
+	if opciones.SimularFalla {
+		log.Println("ATENCIÓN: SIMULAR_FALLA_CHECKOUT activo, todos los checkouts harán ROLLBACK")
+	}
+	repo := repository.NuevoPostgresRepository(pool, opciones)
+
+	// 3. Controladores, cada uno con las interfaces que necesita.
+	checkoutCtl := controllers.NuevoCheckoutController(repo, redisCache)
+	controladores := routes.Controladores{
+		Auth:      controllers.NuevoAuthController(repo),
+		Productos: controllers.NuevoProductoController(repo, redisCache),
+		Red:       controllers.NuevoRedController(repo, redisCache),
+		Checkout:  checkoutCtl,
+	}
 
 	// Instanciamos una nueva aplicación de Fiber y la guardamos en la variable 'app'.
 	app := fiber.New()
@@ -43,11 +72,11 @@ func main() {
 		ExposeHeaders: "X-Cache",
 	}))
 
-	// Llamamos a la función SetupRoutes de nuestro paquete 'routes', enviándole la instancia de nuestra 'app'.
-	routes.SetupRoutes(app)
+	// 4. Rutas con los controladores ya inyectados.
+	routes.SetupRoutes(app, controladores)
 
 	// Al presionar Ctrl+C apagamos Fiber de forma ordenada para que Listen retorne
-	// y se ejecute el defer que cierra la conexión a la base de datos.
+	// y se ejecuten los defer que cierran Redis y PostgreSQL.
 	go func() {
 		senal := make(chan os.Signal, 1)
 		signal.Notify(senal, os.Interrupt, syscall.SIGTERM)
@@ -60,6 +89,9 @@ func main() {
 	if err := app.Listen(":3000"); err != nil {
 		log.Println("Servidor detenido:", err)
 	}
+
+	// Antes de cerrar la base de datos, dejamos terminar las comisiones que estén en curso.
+	checkoutCtl.EsperarComisiones()
 }
 
 

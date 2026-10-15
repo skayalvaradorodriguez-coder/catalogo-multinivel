@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
+import { useAuth } from "../context/useAuth";
+import { enviarPedido } from "../services/checkoutService";
 
 const METODOS_PAGO = ["Tarjeta de crédito", "Transferencia bancaria", "Efectivo contra entrega"];
 
 const Checkout = () => {
   const { cart, totalPrice, clearCart } = useCart();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [datos, setDatos] = useState({
@@ -17,6 +20,7 @@ const Checkout = () => {
     metodoPago: METODOS_PAGO[0],
   });
   const [procesando, setProcesando] = useState(false);
+  const [error, setError] = useState("");
 
   if (cart.length === 0) {
     return (
@@ -33,26 +37,43 @@ const Checkout = () => {
     setDatos((prev) => ({ ...prev, [campo]: valor }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     setProcesando(true);
 
-    setTimeout(() => {
+    try {
+      // El backend guarda el pedido en PostgreSQL (BEGIN ... COMMIT) y responde
+      // sin esperar el cálculo de comisiones, que corre en una goroutine.
+      const { metodoPago, ...cliente } = datos;
+      const guardado = await enviarPedido({
+        usuarioEmail: user?.email,
+        cliente,
+        metodoPago,
+        items: cart.map((item) => ({ id: item.id, cantidad: item.cantidad })),
+      });
+
+      // Usamos los precios y el total que calculó el servidor.
       const pedido = {
-        numero: `MC-${Date.now().toString().slice(-6)}`,
-        items: cart.map((item) => ({
-          nombre: item.nombre,
-          cantidad: item.cantidad,
-          precio: item.precio,
-        })),
-        total: totalPrice,
-        cliente: { nombre: datos.nombre, email: datos.email, ciudad: datos.ciudad },
-        fecha: new Date().toLocaleString("es-EC"),
+        numero: guardado.numero,
+        items: guardado.items,
+        total: guardado.total,
+        cliente: { nombre: guardado.cliente.nombre, email: guardado.cliente.email, ciudad: guardado.cliente.ciudad },
+        fecha: new Date(guardado.creadoEn).toLocaleString("es-EC"),
       };
 
       clearCart();
       navigate("/confirmacion", { state: { pedido } });
-    }, 1200);
+    } catch (err) {
+      // Si la transacción falló (ROLLBACK), nos quedamos en el formulario y el carrito se conserva.
+      setError(
+        err instanceof TypeError
+          ? "No se pudo conectar con el servidor. Verifica que el backend esté corriendo."
+          : err.message
+      );
+    } finally {
+      setProcesando(false);
+    }
   };
 
   return (
@@ -138,6 +159,13 @@ const Checkout = () => {
               ))}
             </div>
           </div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm border border-red-200">
+              <p className="font-semibold">No se pudo completar la compra</p>
+              <p>{error}</p>
+            </div>
+          )}
 
           <button
             type="submit"

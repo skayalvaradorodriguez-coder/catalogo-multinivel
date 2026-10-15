@@ -1,6 +1,9 @@
 -- Fase 2: estructura relacional y datos semilla de Multicatálogo.
 -- Docker lo ejecuta automáticamente la primera vez que se crea el volumen.
 
+DROP TABLE IF EXISTS comisiones;
+DROP TABLE IF EXISTS pedido_items;
+DROP TABLE IF EXISTS pedidos;
 DROP TABLE IF EXISTS referidos;
 DROP TABLE IF EXISTS productos;
 DROP TABLE IF EXISTS usuarios;
@@ -25,7 +28,8 @@ CREATE TABLE productos (
     precio      NUMERIC(10, 2) NOT NULL CHECK (precio >= 0),
     categoria   VARCHAR(50)    NOT NULL DEFAULT '',
     img         TEXT           NOT NULL DEFAULT '',
-    galeria     TEXT[]         NOT NULL DEFAULT '{}'
+    galeria     TEXT[]         NOT NULL DEFAULT '{}',
+    stock       INT            NOT NULL DEFAULT 50 CHECK (stock >= 0)
 );
 
 -- ---------------------------------------------------------------------------
@@ -37,7 +41,10 @@ CREATE TABLE referidos (
     nombre    VARCHAR(150)   NOT NULL,
     nivel     INT            NOT NULL CHECK (nivel >= 0),
     ventas    NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    parent_id INT REFERENCES referidos (id) ON DELETE CASCADE
+    parent_id INT REFERENCES referidos (id) ON DELETE CASCADE,
+    -- Fase 4: cuenta de usuario del nodo y saldo de comisiones acumulado.
+    usuario_id INT UNIQUE REFERENCES usuarios (id) ON DELETE SET NULL,
+    comisiones NUMERIC(12, 2) NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_referidos_parent ON referidos (parent_id);
@@ -94,7 +101,50 @@ INSERT INTO referidos (id, nombre, nivel, ventas, parent_id) VALUES
     (6, 'Marco Díaz',    2,  380, 2),
     (7, 'Diana Paz',     3,  300, 4);
 
+-- Fase 4: el administrador es la raíz ("Tú") y el cliente es Diana Paz (nivel 3).
+UPDATE referidos SET usuario_id = 1 WHERE id = 0;
+UPDATE referidos SET usuario_id = 2 WHERE id = 7;
+
 -- Como insertamos ids explícitos, adelantamos las secuencias para los próximos INSERT.
 SELECT setval(pg_get_serial_sequence('usuarios', 'id'),  (SELECT MAX(id) FROM usuarios));
 SELECT setval(pg_get_serial_sequence('productos', 'id'), (SELECT MAX(id) FROM productos));
 SELECT setval(pg_get_serial_sequence('referidos', 'id'), (SELECT MAX(id) FROM referidos));
+
+-- ---------------------------------------------------------------------------
+-- Fase 4: pedidos, detalle y comisiones
+-- ---------------------------------------------------------------------------
+-- Cabecera del pedido.
+CREATE TABLE IF NOT EXISTS pedidos (
+    id             SERIAL PRIMARY KEY,
+    usuario_id     INT            NOT NULL REFERENCES usuarios (id),
+    cliente_nombre VARCHAR(150)   NOT NULL,
+    cliente_email  VARCHAR(150)   NOT NULL,
+    direccion      TEXT           NOT NULL,
+    ciudad         VARCHAR(100)   NOT NULL,
+    telefono       VARCHAR(30)    NOT NULL,
+    metodo_pago    VARCHAR(50)    NOT NULL,
+    total          NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    creado_en      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+
+-- Detalle del pedido. La clave foránea a productos rechaza ids inexistentes.
+CREATE TABLE IF NOT EXISTS pedido_items (
+    id              SERIAL PRIMARY KEY,
+    pedido_id       INT            NOT NULL REFERENCES pedidos (id) ON DELETE CASCADE,
+    producto_id     INT            NOT NULL REFERENCES productos (id),
+    cantidad        INT            NOT NULL CHECK (cantidad > 0),
+    precio_unitario NUMERIC(10, 2) NOT NULL
+);
+
+-- Historial de comisiones pagadas por la goroutine (una fila por nivel ascendente).
+CREATE TABLE IF NOT EXISTS comisiones (
+    id          SERIAL PRIMARY KEY,
+    pedido_id   INT            NOT NULL REFERENCES pedidos (id) ON DELETE CASCADE,
+    referido_id INT            NOT NULL REFERENCES referidos (id) ON DELETE CASCADE,
+    nivel       INT            NOT NULL CHECK (nivel BETWEEN 1 AND 3),
+    monto       NUMERIC(12, 2) NOT NULL,
+    creado_en   TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pedido_items_pedido ON pedido_items (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_comisiones_pedido ON comisiones (pedido_id);

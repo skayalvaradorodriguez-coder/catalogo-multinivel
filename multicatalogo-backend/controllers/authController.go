@@ -9,8 +9,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// AuthController maneja el inicio de sesión. Recibe el repositorio por inyección de dependencias.
+type AuthController struct {
+	repo repository.DBRepository
+}
+
+// NuevoAuthController crea el controlador con sus dependencias.
+func NuevoAuthController(repo repository.DBRepository) *AuthController {
+	return &AuthController{repo: repo}
+}
+
 // Login valida las credenciales y devuelve el token y el rol del usuario.
-func Login(c *fiber.Ctx) error {
+func (ctl *AuthController) Login(c *fiber.Ctx) error {
 
 	var req models.LoginRequest
 
@@ -38,7 +48,7 @@ func Login(c *fiber.Ctx) error {
 	}
 
 	// Buscar el usuario en PostgreSQL a través del repositorio.
-	usuario, err := repository.BuscarUsuarioPorCredenciales(c.Context(), email, password)
+	usuario, err := ctl.repo.BuscarUsuarioPorCredenciales(c.Context(), email, password)
 	if err != nil {
 		return errorInterno(c, err)
 	}

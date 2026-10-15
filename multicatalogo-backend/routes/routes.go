@@ -8,19 +8,30 @@ import (
 	"multicatalogo-backend/controllers"
 )
 
-// SetupRoutes es una función que recibe un puntero a la aplicación Fiber (*fiber.App) para inyectarle las rutas.
-func SetupRoutes(app *fiber.App) {
-	// Definimos una ruta HTTP POST en "/api/login" y la enlazamos a la función Login del paquete controllers.
-	app.Post("/api/login", controllers.Login)
+// Controladores agrupa los controladores ya construidos con sus dependencias (ver main.go).
+type Controladores struct {
+	Auth      *controllers.AuthController
+	Productos *controllers.ProductoController
+	Red       *controllers.RedController
+	Checkout  *controllers.CheckoutController
+}
 
-	// Definimos una ruta HTTP GET en "/api/productos" y la enlazamos a la función GetProductos del paquete controllers.
-	app.Get("/api/productos", controllers.GetProductos)
+// SetupRoutes recibe la aplicación Fiber y los controladores inyectados, y registra las rutas.
+func SetupRoutes(app *fiber.App, ctl Controladores) {
+	// Inicio de sesión.
+	app.Post("/api/login", ctl.Auth.Login)
+
+	// Catálogo completo (con caché en Redis).
+	app.Get("/api/productos", ctl.Productos.GetProductos)
 
 	// Producto individual por ID.
-	app.Get("/api/productos/:id", controllers.GetProductoPorID)
+	app.Get("/api/productos/:id", ctl.Productos.GetProductoPorID)
 
-	// Red multinivel de referidos (árbol jerárquico).
-	app.Get("/api/red", controllers.GetRed)
+	// Red multinivel de referidos (árbol jerárquico, con caché en Redis).
+	app.Get("/api/red", ctl.Red.GetRed)
+
+	// Fase 4: compra con transacción ACID y comisiones en segundo plano.
+	app.Post("/api/checkout", ctl.Checkout.Checkout)
 
 	// Verificación de estado del servidor.
 	app.Get("/api/health", controllers.Health)
