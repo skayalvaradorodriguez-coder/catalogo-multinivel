@@ -1,18 +1,25 @@
-// Capa de servicios del catálogo. Consulta el backend en Go, que a su vez lee
-// los productos desde PostgreSQL. Los componentes no cambian: siguen recibiendo
-// una promesa con los mismos campos que tenía el mock.
-import { API_URL } from "../config";
+// Catálogo público y administración de productos.
+import { apiFetch } from "./http";
 
-export const getProductos = async () => {
-  const response = await fetch(`${API_URL}/api/productos`);
-  if (!response.ok) throw new Error("No se pudo cargar el catálogo");
-  return response.json();
-};
+export const getProductos = (q) => apiFetch("/api/productos", { query: { q } });
 
+// Devuelve undefined si el producto no existe o está desactivado (404).
 export const getProductoById = async (id) => {
-  const response = await fetch(`${API_URL}/api/productos/${id}`);
-  // 404 = el producto no existe: devolvemos undefined, igual que hacía el mock.
-  if (response.status === 404) return undefined;
-  if (!response.ok) throw new Error("No se pudo cargar el producto");
-  return response.json();
+  try {
+    return await apiFetch(`/api/productos/${id}`);
+  } catch (err) {
+    if (err.status === 404) return undefined;
+    throw err;
+  }
 };
+
+// ---- Administración (requiere rol admin) ----
+export const getProductosAdmin = ({ page, limit, q }) =>
+  apiFetch("/api/admin/productos", { query: { page, limit, q } });
+
+export const crearProducto = (producto) => apiFetch("/api/productos", { method: "POST", body: producto });
+
+export const actualizarProducto = (id, cambios) =>
+  apiFetch(`/api/productos/${id}`, { method: "PUT", body: cambios });
+
+export const desactivarProducto = (id) => apiFetch(`/api/productos/${id}`, { method: "DELETE" });

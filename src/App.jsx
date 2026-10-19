@@ -9,6 +9,12 @@ import Carrito from "./components/Carrito";
 import Checkout from "./components/Checkout";
 import Confirmacion from "./components/Confirmacion";
 import Login from "./components/Login";
+import Registro from "./components/Registro";
+import MisPedidos from "./components/MisPedidos";
+import AdminProductos from "./components/admin/AdminProductos";
+import AdminPedidos from "./components/admin/AdminPedidos";
+import AdminUsuarios from "./components/admin/AdminUsuarios";
+import AdminLiquidaciones from "./components/admin/AdminLiquidaciones";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
 import { useAuth } from "./context/useAuth";
@@ -42,13 +48,17 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/registro" element={<Registro />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<Layout />}>
                 {/* Solo administrador */}
                 <Route element={<AdminRoute />}>
                   <Route index element={<Dashboard />} />
-                  <Route path="mi-red" element={<MiRed />} />
+                  <Route path="admin/productos" element={<AdminProductos />} />
+                  <Route path="admin/pedidos" element={<AdminPedidos />} />
+                  <Route path="admin/usuarios" element={<AdminUsuarios />} />
+                  <Route path="admin/liquidaciones" element={<AdminLiquidaciones />} />
                 </Route>
 
                 {/* Ambos roles */}
@@ -58,10 +68,12 @@ function App() {
                 <Route path="carrito" element={<Carrito />} />
                 <Route path="checkout" element={<Checkout />} />
                 <Route path="confirmacion" element={<Confirmacion />} />
+                <Route path="mis-pedidos" element={<MisPedidos />} />
+                <Route path="mi-red" element={<MiRed />} />
               </Route>
             </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/tienda" replace />} />
           </Routes>
         </BrowserRouter>
       </CartBoundary>

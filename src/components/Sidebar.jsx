@@ -1,5 +1,15 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Grid3x3, Users, Store } from "lucide-react";
+import {
+  LayoutDashboard,
+  Grid3x3,
+  Users,
+  Store,
+  Package,
+  ClipboardList,
+  UserCog,
+  Wallet,
+  Receipt,
+} from "lucide-react";
 import { useAuth } from "../context/useAuth";
 
 const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
@@ -10,7 +20,12 @@ const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
     { to: "/", label: "Dashboard", icon: LayoutDashboard, soloAdmin: true },
     { to: "/tienda", label: "Tienda", icon: Store, soloAdmin: false },
     { to: "/catalogo", label: "Catálogo", icon: Grid3x3, soloAdmin: false },
-    { to: "/mi-red", label: "Mi Red", icon: Users, soloAdmin: true },
+    { to: "/mis-pedidos", label: "Mis Pedidos", icon: Receipt, soloAdmin: false },
+    { to: "/mi-red", label: "Mi Red", icon: Users, soloAdmin: false },
+    { to: "/admin/productos", label: "Productos", icon: Package, soloAdmin: true },
+    { to: "/admin/pedidos", label: "Pedidos", icon: ClipboardList, soloAdmin: true },
+    { to: "/admin/usuarios", label: "Usuarios", icon: UserCog, soloAdmin: true },
+    { to: "/admin/liquidaciones", label: "Liquidaciones", icon: Wallet, soloAdmin: true },
   ];
 
   const visibles = links.filter((link) => !link.soloAdmin || user?.rol === "admin");
@@ -28,7 +43,7 @@ const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
         <span className={isCollapsed ? "md:hidden" : ""}>MultiCatálogo</span>
         {isCollapsed && <span className="hidden md:inline">MC</span>}
       </div>
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {visibles.map(({ to, label, icon: Icon }) => {
           const esActivo = to === "/" ? pathname === "/" : pathname.startsWith(to);
           return (
@@ -36,7 +51,7 @@ const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
               key={to}
               to={to}
               onClick={() => setIsMobileOpen && setIsMobileOpen(false)}
-              className={`flex items-center gap-3 p-3 rounded transition ${
+              className={`flex items-center gap-3 p-3 min-h-11 rounded transition ${
                 esActivo ? "bg-teal-900" : "hover:bg-teal-600"
               } ${isCollapsed ? "md:justify-center" : ""}`}
               title={isCollapsed ? label : undefined}

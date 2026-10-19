@@ -18,9 +18,13 @@ const (
 	ClaveProductos = "productos:all"
 	TTLProductos   = 5 * time.Minute
 
-	PrefijoRed = "red:tree:" // + email del usuario
+	PrefijoRed = "red:tree:" // + email del usuario, o "global" para el árbol completo del admin
+	PatronRed  = "red:tree:*"
 	TTLRed     = 10 * time.Minute
 )
+
+// ErrSinCache indica que Redis no está configurado o no respondió al arrancar.
+var ErrSinCache = errors.New("redis no disponible")
 
 // ClaveRed arma la clave del árbol de un usuario: red:tree:{email}.
 func ClaveRed(email string) string {
@@ -36,6 +40,10 @@ type CacheRepository interface {
 	Guardar(ctx context.Context, clave string, valor interface{}, ttl time.Duration)
 	// Eliminar borra una o varias claves (invalidación de caché).
 	Eliminar(ctx context.Context, claves ...string)
+	// EliminarPatron borra todas las claves que coinciden, por ejemplo "red:tree:*".
+	EliminarPatron(ctx context.Context, patron string)
+	// Ping verifica que Redis responda (lo usa /api/health).
+	Ping(ctx context.Context) error
 }
 
 // RedisCache implementa CacheRepository sobre un cliente de Redis.
@@ -92,6 +100,30 @@ func (r *RedisCache) Eliminar(ctx context.Context, claves ...string) {
 	if err := r.cliente.Del(ctx, claves...).Err(); err != nil {
 		log.Printf("Aviso: no se pudieron eliminar %v de Redis: %v", claves, err)
 	}
+}
+
+func (r *RedisCache) EliminarPatron(ctx context.Context, patron string) {
+	if r.cliente == nil {
+		return
+	}
+	// SCAN recorre las claves por lotes sin bloquear Redis (a diferencia de KEYS).
+	iter := r.cliente.Scan(ctx, 0, patron, 100).Iterator()
+	var claves []string
+	for iter.Next(ctx) {
+		claves = append(claves, iter.Val())
+	}
+	if err := iter.Err(); err != nil {
+		log.Printf("Aviso: no se pudo recorrer %q en Redis: %v", patron, err)
+		return
+	}
+	r.Eliminar(ctx, claves...)
+}
+
+func (r *RedisCache) Ping(ctx context.Context) error {
+	if r.cliente == nil {
+		return ErrSinCache
+	}
+	return r.cliente.Ping(ctx).Err()
 }
 
 // Cerrar libera las conexiones del cliente.

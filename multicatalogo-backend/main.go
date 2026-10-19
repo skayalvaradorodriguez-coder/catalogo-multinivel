@@ -6,25 +6,26 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	// Importamos el framework principal Fiber.
 	"github.com/gofiber/fiber/v2"
-	// Importamos el middleware CORS para gestionar la seguridad entre distintos puertos/dominios.
 	"github.com/gofiber/fiber/v2/middleware/cors"
 
 	"multicatalogo-backend/cache"
 	"multicatalogo-backend/config"
 	"multicatalogo-backend/controllers"
+	"multicatalogo-backend/notificaciones"
 	"multicatalogo-backend/repository"
 	"multicatalogo-backend/routes"
 )
 
-// func main es el punto de entrada de la aplicación en Go. Todo comienza a ejecutarse aquí.
-// Aquí se construyen las dependencias UNA sola vez y se inyectan hacia abajo:
-// conexiones → repositorio y caché → controladores → rutas.
+// main construye las dependencias UNA sola vez y las inyecta hacia abajo:
+// configuración → conexiones → repositorio y caché → controladores → rutas.
 func main() {
 	config.CargarEnv()
+	cfg, err := config.CargarConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// 1. Infraestructura. Si PostgreSQL falla, no tiene sentido arrancar.
 	pool, err := config.ConectarDB()
@@ -41,42 +42,32 @@ func main() {
 	defer redisCache.Cerrar()
 
 	// 2. Capa de datos. Las opciones permiten simular fallas del checkout en clase (ver .env).
-	opciones := repository.OpcionesCheckout{
-		SimularFalla: config.GetEnvBool("SIMULAR_FALLA_CHECKOUT"),
-		Pausa:        time.Duration(config.GetEnvInt("CHECKOUT_PAUSA_SEGUNDOS", 0)) * time.Second,
-	}
-	if opciones.SimularFalla {
+	if cfg.SimularFallaCheckout {
 		log.Println("ATENCIÓN: SIMULAR_FALLA_CHECKOUT activo, todos los checkouts harán ROLLBACK")
 	}
-	repo := repository.NuevoPostgresRepository(pool, opciones)
+	repo := repository.NuevoPostgresRepository(pool, repository.OpcionesCheckout{
+		SimularFalla: cfg.SimularFallaCheckout,
+		Pausa:        cfg.PausaCheckout,
+	})
 
-	// 3. Controladores, cada uno con las interfaces que necesita.
-	checkoutCtl := controllers.NuevoCheckoutController(repo, redisCache)
-	controladores := routes.Controladores{
-		Auth:      controllers.NuevoAuthController(repo),
-		Productos: controllers.NuevoProductoController(repo, redisCache),
-		Red:       controllers.NuevoRedController(repo, redisCache),
-		Checkout:  checkoutCtl,
-	}
+	// 3. Controladores con sus interfaces.
+	ctl := controllers.NewControllers(repo, redisCache, notificaciones.LogMailer{}, cfg)
 
-	// Instanciamos una nueva aplicación de Fiber y la guardamos en la variable 'app'.
 	app := fiber.New()
-
-	// Implementamos el middleware CORS a nivel global usando app.Use() para interceptar todas las peticiones entrantes.
 	app.Use(cors.New(cors.Config{
-		// Configuramos el CORS para permitir únicamente peticiones provenientes del frontend local en el puerto 5173.
-		AllowOrigins: "http://localhost:5173, http://127.0.0.1:5173, http://172.17.82.108:5173",
-		// Declaramos de forma explícita qué cabeceras (Headers) se permitirán en la comunicación.
-		AllowHeaders: "Origin, Content-Type, Accept",
-		// Dejamos que el navegador lea la cabecera X-Cache (HIT / MISS) en la pestaña Network.
-		ExposeHeaders: "X-Cache",
+		AllowOrigins: cfg.CORSOrigins,
+		// En desarrollo también se acepta el frontend abierto desde la red local
+		// (la dirección "Network" que muestra Vite, p. ej. http://192.168.1.10:5173).
+		AllowOriginsFunc: func(origen string) bool { return cfg.EsDev() && config.OrigenLocal(origen) },
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+		ExposeHeaders:    "X-Cache",
 	}))
 
-	// 4. Rutas con los controladores ya inyectados.
-	routes.SetupRoutes(app, controladores)
+	// 4. Rutas con los controladores ya inyectados y los middlewares de seguridad.
+	routes.SetupRoutes(app, ctl, cfg.JWTSecret)
 
-	// Al presionar Ctrl+C apagamos Fiber de forma ordenada para que Listen retorne
-	// y se ejecuten los defer que cierran Redis y PostgreSQL.
+	// Ctrl+C: apagado ordenado para que se ejecuten los defer que cierran Redis y PostgreSQL.
 	go func() {
 		senal := make(chan os.Signal, 1)
 		signal.Notify(senal, os.Interrupt, syscall.SIGTERM)
@@ -85,72 +76,11 @@ func main() {
 		_ = app.Shutdown()
 	}()
 
-	// Ponemos a la aplicación a escuchar peticiones en el puerto 3000 de la máquina local. (Bloquea el hilo de ejecución).
-	if err := app.Listen(":3000"); err != nil {
+	log.Printf("Entorno: %s · puerto %s", cfg.Entorno, cfg.Puerto)
+	if err := app.Listen(":" + cfg.Puerto); err != nil {
 		log.Println("Servidor detenido:", err)
 	}
 
-	// Antes de cerrar la base de datos, dejamos terminar las comisiones que estén en curso.
-	checkoutCtl.EsperarComisiones()
+	// Antes de cerrar la base de datos, dejamos terminar las goroutines de comisiones en curso.
+	ctl.Checkout.EsperarComisiones()
 }
-
-
-
-
-
-// // main.go
-// package main
-
-// import (
-// 	"github.com/gofiber/fiber/v2"
-// 	"github.com/gofiber/fiber/v2/middleware/cors"
-// )
-
-// // Estructuras de datos
-// type LoginRequest struct {
-// 	Email    string `json:"email"`
-// 	Password string `json:"password"`
-// }
-
-// type Producto struct {
-// 	ID     int     `json:"id"`
-// 	Nombre string  `json:"nombre"`
-// 	Precio float64 `json:"precio"`
-// 	Img    string  `json:"img"`
-// }
-
-// func main() {
-// 	app := fiber.New()
-
-// 	// Middleware CORS para permitir peticiones desde React (Vite corre en el puerto 5173)
-// 	app.Use(cors.New(cors.Config{
-// 		AllowOrigins: "http://localhost:5173",
-// 		AllowHeaders: "Origin, Content-Type, Accept",
-// 	}))
-
-// 	// Endpoint para Login
-// 	app.Post("/api/login", func(c *fiber.Ctx) error {
-// 		var req LoginRequest
-// 		if err := c.BodyParser(&req); err != nil {
-// 			return c.Status(400).JSON(fiber.Map{"error": "Cuerpo de petición inválido"})
-// 		}
-
-// 		if req.Email == "admin@upse.edu.ec" && req.Password == "123456" {
-// 			return c.JSON(fiber.Map{"token": "fake-jwt-token-123", "email": req.Email})
-// 		}
-// 		return c.Status(401).JSON(fiber.Map{"error": "Credenciales incorrectas"})
-// 	})
-
-// 	// Endpoint para obtener Productos
-// 	app.Get("/api/productos", func(c *fiber.Ctx) error {
-// 		productos := []Producto{
-// 			{ID: 1, Nombre: "Serum Revitalizante", Precio: 45.00, Img: "https://picsum.photos/seed/serum/150"},
-// 			{ID: 2, Nombre: "Crema Hidratante Pro", Precio: 32.50, Img: "https://picsum.photos/seed/crema/150"},
-// 			{ID: 3, Nombre: "Tónico Purificante", Precio: 28.00, Img: "https://picsum.photos/seed/tonico/150"},
-// 			{ID: 4, Nombre: "Mascarilla Nocturna", Precio: 50.00, Img: "https://picsum.photos/seed/mascarilla/150"},
-// 		}
-// 		return c.JSON(productos)
-// 	})
-
-// 	app.Listen(":3000")
-// }

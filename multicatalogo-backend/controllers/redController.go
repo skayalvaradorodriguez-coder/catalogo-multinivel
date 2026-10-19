@@ -10,49 +10,46 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// RedController maneja la red multinivel. Recibe el repositorio y la caché por inyección de dependencias.
+// RedController maneja la red multinivel (Cache-Aside, TTL 10 min).
 type RedController struct {
+	base
 	repo  repository.DBRepository
 	cache cache.CacheRepository
 }
 
-// NuevoRedController crea el controlador con sus dependencias.
-func NuevoRedController(repo repository.DBRepository, cache cache.CacheRepository) *RedController {
-	return &RedController{repo: repo, cache: cache}
+// GetRed: GET /api/red (admin) — árbol completo. Clave red:tree:global.
+func (ctl *RedController) GetRed(c *fiber.Ctx) error {
+	return ctl.responder(c, cache.ClaveRed("global"), func() (*models.Referido, error) {
+		return ctl.repo.ObtenerRed(c.Context())
+	})
 }
 
-// GetRed devuelve la red multinivel como árbol (misma forma que usaba el mock del frontend).
-// Armar el árbol es costoso, así que se guarda en Redis por usuario:
-// clave red:tree:{email}, con TTL de 10 minutos.
-//
-// El email llega como parámetro: GET /api/red?email=admin@upse.edu.ec
-func (ctl *RedController) GetRed(c *fiber.Ctx) error {
-	ctx := c.Context()
-
-	email := strings.ToLower(strings.TrimSpace(c.Query("email")))
-	if email == "" {
-		email = "invitado"
+// GetMiRed: GET /api/red/mia — subárbol del usuario del token. Clave red:tree:{email}.
+func (ctl *RedController) GetMiRed(c *fiber.Ctx) error {
+	claims := usuarioToken(c)
+	usuario, err := ctl.repo.BuscarUsuarioPorID(c.Context(), claims.UsuarioID())
+	if err != nil {
+		return ctl.errorRepo(c, err, "Usuario no encontrado")
 	}
-	clave := cache.ClaveRed(email)
+	if usuario.ReferidoID == nil {
+		return ctl.errorJSON(c, fiber.StatusNotFound, "Tu cuenta todavía no pertenece a la red", nil)
+	}
+	return ctl.responder(c, cache.ClaveRed(strings.ToLower(usuario.Email)), func() (*models.Referido, error) {
+		return ctl.repo.ObtenerSubRed(c.Context(), *usuario.ReferidoID)
+	})
+}
 
-	// Cache Hit: el árbol ya está armado en Redis.
+func (ctl *RedController) responder(c *fiber.Ctx, clave string, consultar func() (*models.Referido, error)) error {
 	var red models.Referido
-	if ctl.cache.Obtener(ctx, clave, &red) {
+	if ctl.cache.Obtener(c.Context(), clave, &red) {
 		c.Set("X-Cache", "HIT")
 		return c.JSON(red)
 	}
-
-	// Cache Miss: lo armamos desde PostgreSQL y lo guardamos.
-	arbol, err := ctl.repo.ObtenerRed(ctx)
+	arbol, err := consultar()
 	if err != nil {
-		return errorInterno(c, err)
+		return ctl.errorRepo(c, err, "La red de referidos está vacía")
 	}
-	if arbol == nil {
-		return c.Status(fiber.StatusNotFound).JSON(
-			models.NewAPIError(fiber.StatusNotFound, "La red de referidos está vacía", nil))
-	}
-	ctl.cache.Guardar(ctx, clave, arbol, cache.TTLRed)
-
+	ctl.cache.Guardar(c.Context(), clave, arbol, cache.TTLRed)
 	c.Set("X-Cache", "MISS")
 	return c.JSON(arbol)
 }

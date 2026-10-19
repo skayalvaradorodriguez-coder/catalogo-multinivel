@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
-import { useAuth } from "../context/useAuth";
 import { enviarPedido } from "../services/checkoutService";
 
 const METODOS_PAGO = ["Tarjeta de crédito", "Transferencia bancaria", "Efectivo contra entrega"];
 
 const Checkout = () => {
   const { cart, totalPrice, clearCart } = useCart();
-  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [datos, setDatos] = useState({
@@ -43,11 +41,10 @@ const Checkout = () => {
     setProcesando(true);
 
     try {
-      // El backend guarda el pedido en PostgreSQL (BEGIN ... COMMIT) y responde
-      // sin esperar el cálculo de comisiones, que corre en una goroutine.
+      // El backend guarda el pedido en PostgreSQL (BEGIN ... COMMIT). El comprador se identifica
+      // con el token de la sesión (apiFetch lo envía solo), no con datos del formulario.
       const { metodoPago, ...cliente } = datos;
       const guardado = await enviarPedido({
-        usuarioEmail: user?.email,
         cliente,
         metodoPago,
         items: cart.map((item) => ({ id: item.id, cantidad: item.cantidad })),
@@ -66,11 +63,7 @@ const Checkout = () => {
       navigate("/confirmacion", { state: { pedido } });
     } catch (err) {
       // Si la transacción falló (ROLLBACK), nos quedamos en el formulario y el carrito se conserva.
-      setError(
-        err instanceof TypeError
-          ? "No se pudo conectar con el servidor. Verifica que el backend esté corriendo."
-          : err.message
-      );
+      setError(err.mensajeCompleto ?? err.message);
     } finally {
       setProcesando(false);
     }
@@ -170,7 +163,7 @@ const Checkout = () => {
           <button
             type="submit"
             disabled={procesando}
-            className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full min-h-11 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {procesando ? "Procesando pago..." : "Confirmar Pedido"}
           </button>

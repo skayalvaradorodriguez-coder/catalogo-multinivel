@@ -1,9 +1,8 @@
-// Servicio de la red multinivel: pide el árbol de referidos al backend.
-// El backend lo arma desde PostgreSQL y lo guarda en Redis por usuario (red:tree:{email}).
-import { API_URL } from "../config";
+// Red multinivel. La identidad sale del token, no de la URL.
+import { apiFetch } from "./http";
 
-export const getRed = async (email) => {
-  const response = await fetch(`${API_URL}/api/red?email=${encodeURIComponent(email ?? "")}`);
-  if (!response.ok) throw new Error("No se pudo cargar la red");
-  return response.json();
-};
+// Subárbol del usuario conectado (cada usuario ve SU red).
+export const getMiRed = () => apiFetch("/api/red/mia");
+
+// Árbol completo (solo admin).
+export const getRedGlobal = () => apiFetch("/api/red");

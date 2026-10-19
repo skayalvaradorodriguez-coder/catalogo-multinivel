@@ -7,24 +7,15 @@ import (
 	"log"
 	"time"
 
+	"multicatalogo-backend/domain"
 	"multicatalogo-backend/models"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// ErrValidacion indica un problema con los datos del pedido (producto inexistente,
-// stock insuficiente...). El controlador lo traduce a HTTP 400; cualquier otro error es un 500.
-type ErrValidacion struct {
-	Mensaje string
-}
+func numeroPedido(id int) string { return fmt.Sprintf("MC-%06d", id) }
 
-func (e *ErrValidacion) Error() string { return e.Mensaje }
-
-// TasaComision por nivel ascendente: el patrocinador directo cobra 10%, el siguiente 5% y el tercero 2%.
-var TasaComision = map[int]float64{1: 0.10, 2: 0.05, 3: 0.02}
-
-// CrearPedido guarda el pedido y su detalle dentro de una transacción ACID.
+// CrearPedido guarda el pedido, su detalle y el ledger de comisiones en UNA transacción ACID.
 // Si cualquier paso falla, el defer hace ROLLBACK y no queda ningún "pedido fantasma".
 func (r *PostgresRepository) CrearPedido(ctx context.Context, nuevo models.NuevoPedido) (*models.Pedido, error) {
 	// BEGIN
@@ -39,7 +30,10 @@ func (r *PostgresRepository) CrearPedido(ctx context.Context, nuevo models.Nuevo
 		}
 	}()
 
-	pedido := &models.Pedido{Cliente: nuevo.Cliente, MetodoPago: nuevo.MetodoPago, Items: []models.ItemPedido{}}
+	pedido := &models.Pedido{
+		UsuarioID: nuevo.UsuarioID, Cliente: nuevo.Cliente, MetodoPago: nuevo.MetodoPago,
+		Estado: domain.EstadoPendiente, Items: []models.ItemPedido{},
+	}
 
 	// 1. Registro principal del pedido (el total se calcula al final con los precios de la base).
 	err = tx.QueryRow(ctx, `
@@ -53,53 +47,51 @@ func (r *PostgresRepository) CrearPedido(ctx context.Context, nuevo models.Nuevo
 		return nil, err
 	}
 
-	// Falla simulada para la clase (SIMULAR_FALLA_CHECKOUT=true en el .env):
-	// el pedido ya se insertó, pero como no hay COMMIT, el ROLLBACK lo borra.
+	// Falla simulada para la clase (SIMULAR_FALLA_CHECKOUT=true en el .env).
 	if r.opciones.SimularFalla {
 		return nil, errors.New("falla simulada: caída del sistema antes de procesar los items")
 	}
 
 	// 2. Detalle del pedido, restando el stock.
 	for _, item := range nuevo.Items {
-		var linea models.ItemPedido
-		linea.ProductoID = item.ProductoID
-		linea.Cantidad = item.Cantidad
+		if item.Cantidad <= 0 {
+			return nil, ErrCantidadInvalida
+		}
+		linea := models.ItemPedido{ProductoID: item.ProductoID, Cantidad: item.Cantidad}
 
-		// El precio se copia desde productos. Si el producto no existe, la clave foránea
-		// producto_id hace que PostgreSQL rechace el INSERT (código 23503).
+		// Si el producto no existe, la clave foránea producto_id rechaza el INSERT (código 23503).
 		err = tx.QueryRow(ctx, `
 			INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
 			VALUES ($1, $2, $3, COALESCE((SELECT precio FROM productos WHERE id = $2), 0))
 			RETURNING precio_unitario::float8`,
 			pedido.ID, item.ProductoID, item.Cantidad,
 		).Scan(&linea.Precio)
+		if codigoPG(err) == "23503" {
+			return nil, errValidacion("El producto con id %d no existe", item.ProductoID)
+		}
 		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-				return nil, &ErrValidacion{Mensaje: fmt.Sprintf("El producto con id %d no existe", item.ProductoID)}
-			}
 			return nil, err
 		}
 
-		// Bloqueamos la fila (FOR UPDATE) para que dos compras simultáneas no vendan el mismo stock.
+		// FOR UPDATE: dos compras simultáneas no pueden vender el mismo stock.
 		var stock int
+		var activo bool
 		err = tx.QueryRow(ctx,
-			"SELECT nombre, stock FROM productos WHERE id = $1 FOR UPDATE", item.ProductoID,
-		).Scan(&linea.Nombre, &stock)
+			"SELECT nombre, stock, activo FROM productos WHERE id = $1 FOR UPDATE", item.ProductoID,
+		).Scan(&linea.Nombre, &stock, &activo)
 		if err != nil {
 			return nil, err
+		}
+		if !activo {
+			return nil, errValidacion("El producto %s ya no está disponible", linea.Nombre)
 		}
 		if stock < item.Cantidad {
-			return nil, &ErrValidacion{Mensaje: fmt.Sprintf(
-				"Stock insuficiente para %s: quedan %d unidades", linea.Nombre, stock)}
+			return nil, errValidacion("Stock insuficiente para %s: quedan %d unidades", linea.Nombre, stock)
 		}
-
 		if _, err = tx.Exec(ctx,
-			"UPDATE productos SET stock = stock - $1 WHERE id = $2", item.Cantidad, item.ProductoID,
-		); err != nil {
+			"UPDATE productos SET stock = stock - $1 WHERE id = $2", item.Cantidad, item.ProductoID); err != nil {
 			return nil, err
 		}
-
 		pedido.Items = append(pedido.Items, linea)
 	}
 
@@ -114,6 +106,11 @@ func (r *PostgresRepository) CrearPedido(ctx context.Context, nuevo models.Nuevo
 		return nil, err
 	}
 
+	// 4. Ledger de comisiones: nace con el pedido, dentro de la misma transacción.
+	if err = insertarComisiones(ctx, tx, pedido.ID, nuevo.UsuarioID, pedido.Total); err != nil {
+		return nil, err
+	}
+
 	// Pausa opcional (CHECKOUT_PAUSA_SEGUNDOS en el .env) para detener PostgreSQL antes del COMMIT.
 	if r.opciones.Pausa > 0 {
 		log.Printf("Pedido %d listo: esperando %s antes del COMMIT...", pedido.ID, r.opciones.Pausa)
@@ -125,97 +122,188 @@ func (r *PostgresRepository) CrearPedido(ctx context.Context, nuevo models.Nuevo
 		return nil, err
 	}
 
-	pedido.Numero = fmt.Sprintf("MC-%06d", pedido.ID)
+	pedido.Numero = numeroPedido(pedido.ID)
 	log.Printf("COMMIT: pedido %s guardado (total $%.2f)", pedido.Numero, pedido.Total)
 	return pedido, nil
 }
 
-// CalcularComisiones se ejecuta en una goroutine después del COMMIT del pedido.
-// En su propia transacción: suma la venta al nodo del comprador en la red y paga
-// comisiones a sus referidos ascendentes de nivel 1, 2 y 3.
-func (r *PostgresRepository) CalcularComisiones(ctx context.Context, pedidoID, usuarioID int, total float64) ([]string, error) {
+// insertarComisiones busca hasta 3 patrocinadores sobre el nodo del comprador
+// (usuarios.referido_id → parent_id) y escribe una fila del ledger por cada uno.
+func insertarComisiones(ctx context.Context, tx pgx.Tx, pedidoID, usuarioID int, total float64) error {
+	filas, err := tx.Query(ctx, `
+		WITH RECURSIVE upline AS (
+			SELECT r.parent_id AS id, 1 AS distancia
+			FROM usuarios u JOIN referidos r ON r.id = u.referido_id
+			WHERE u.id = $1 AND r.parent_id IS NOT NULL
+			UNION ALL
+			SELECT r.parent_id, up.distancia + 1
+			FROM upline up JOIN referidos r ON r.id = up.id
+			WHERE r.parent_id IS NOT NULL AND up.distancia < $2
+		)
+		SELECT id FROM upline ORDER BY distancia`, usuarioID, len(domain.TasasMLM))
+	if err != nil {
+		return err
+	}
+	upline, err := pgx.CollectRows(filas, pgx.RowTo[int])
+	if err != nil {
+		return err
+	}
+
+	// Regla de negocio pura (sin I/O): cuánto le toca a cada nivel.
+	reparto := domain.RepartirComisiones(total, domain.TasasMLM)
+	for i, referidoID := range upline {
+		c := reparto[i]
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO comisiones (pedido_id, referido_id, nivel, porcentaje, monto, estado)
+			VALUES ($1, $2, $3, $4, $5, 'pendiente')`,
+			pedidoID, referidoID, c.Nivel, c.Porcentaje, c.Monto); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SumarVentas actualiza el contador de ventas del nodo del comprador.
+// Lo llama la goroutine después del COMMIT; el ledger ya quedó escrito en la transacción.
+func (r *PostgresRepository) SumarVentas(ctx context.Context, usuarioID int, monto float64) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE referidos SET ventas = ventas + $2
+		WHERE id = (SELECT referido_id FROM usuarios WHERE id = $1)`, usuarioID, monto)
+	return err
+}
+
+// ListarPedidos devuelve pedidos paginados (de un usuario o todos) con filtro por estado.
+func (r *PostgresRepository) ListarPedidos(ctx context.Context, f models.FiltroPedidos) (models.Pagina[models.PedidoResumen], error) {
+	page, limit, offset := paginar(f.Page, f.Limit)
+	pagina := models.Pagina[models.PedidoResumen]{Data: []models.PedidoResumen{}, Page: page, Limit: limit}
+	const where = "WHERE ($1::int IS NULL OR p.usuario_id = $1) AND ($2 = '' OR p.estado = $2)"
+
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM pedidos p "+where, f.UsuarioID, f.Estado).
+		Scan(&pagina.Total); err != nil {
+		return pagina, err
+	}
+
+	filas, err := r.db.Query(ctx, `
+		SELECT p.id, p.total::float8, p.estado, p.cliente_nombre, p.cliente_email,
+		       COALESCE((SELECT SUM(cantidad) FROM pedido_items WHERE pedido_id = p.id), 0), p.creado_en
+		FROM pedidos p `+where+`
+		ORDER BY p.id DESC LIMIT $3 OFFSET $4`, f.UsuarioID, f.Estado, limit, offset)
+	if err != nil {
+		return pagina, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var p models.PedidoResumen
+		if err := filas.Scan(&p.ID, &p.Total, &p.Estado, &p.ClienteNombre, &p.ClienteEmail, &p.Unidades, &p.CreadoEn); err != nil {
+			return pagina, err
+		}
+		p.Numero = numeroPedido(p.ID)
+		p.Siguientes = domain.SiguientesEstados(p.Estado)
+		pagina.Data = append(pagina.Data, p)
+	}
+	return pagina, filas.Err()
+}
+
+// ObtenerPedido devuelve cabecera + ítems (con el nombre del producto) o ErrNoEncontrado.
+func (r *PostgresRepository) ObtenerPedido(ctx context.Context, id int) (*models.Pedido, error) {
+	p := &models.Pedido{Items: []models.ItemPedido{}}
+	err := r.db.QueryRow(ctx, `
+		SELECT id, usuario_id, total::float8, estado, metodo_pago, cliente_nombre, cliente_email,
+		       direccion, ciudad, telefono, creado_en
+		FROM pedidos WHERE id = $1`, id,
+	).Scan(&p.ID, &p.UsuarioID, &p.Total, &p.Estado, &p.MetodoPago, &p.Cliente.Nombre, &p.Cliente.Email,
+		&p.Cliente.Direccion, &p.Cliente.Ciudad, &p.Cliente.Telefono, &p.CreadoEn)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNoEncontrado
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	filas, err := r.db.Query(ctx, `
+		SELECT i.producto_id, pr.nombre, i.cantidad, i.precio_unitario::float8
+		FROM pedido_items i JOIN productos pr ON pr.id = i.producto_id
+		WHERE i.pedido_id = $1 ORDER BY i.id`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var item models.ItemPedido
+		if err := filas.Scan(&item.ProductoID, &item.Nombre, &item.Cantidad, &item.Precio); err != nil {
+			return nil, err
+		}
+		p.Items = append(p.Items, item)
+	}
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	p.Numero = numeroPedido(p.ID)
+	p.Siguientes = domain.SiguientesEstados(p.Estado)
+	return p, nil
+}
+
+// CambiarEstadoPedido aplica una transición válida. Cancelar es el espejo ACID del checkout:
+// en la misma transacción devuelve el stock, revierte las comisiones y descuenta las ventas.
+func (r *PostgresRepository) CambiarEstadoPedido(ctx context.Context, id int, nuevo string) (*models.Pedido, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	// Nodo del comprador en la red multinivel.
-	var nodoID int
-	err = tx.QueryRow(ctx, "SELECT id FROM referidos WHERE usuario_id = $1", usuarioID).Scan(&nodoID)
+	var actual string
+	var usuarioID int
+	var total float64
+	err = tx.QueryRow(ctx,
+		"SELECT estado, usuario_id, total::float8 FROM pedidos WHERE id = $1 FOR UPDATE", id,
+	).Scan(&actual, &usuarioID, &total)
 	if errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("Comisiones: el usuario %d no pertenece a la red, no se pagan comisiones", usuarioID)
-		return nil, nil
+		return nil, ErrNoEncontrado
 	}
 	if err != nil {
 		return nil, err
 	}
+	if !domain.TransicionValida(actual, nuevo) {
+		return nil, errValidacion("No se puede pasar un pedido de %q a %q", actual, nuevo)
+	}
 
-	if _, err = tx.Exec(ctx, "UPDATE referidos SET ventas = ventas + $1 WHERE id = $2", total, nodoID); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE pedidos SET estado = $2 WHERE id = $1", id, nuevo); err != nil {
 		return nil, err
 	}
 
-	// Subimos por el árbol con una consulta recursiva (CTE) hasta 3 niveles.
-	filas, err := tx.Query(ctx, `
-		WITH RECURSIVE ascendentes AS (
-			SELECT parent_id AS id, 1 AS distancia
-			FROM referidos WHERE id = $1 AND parent_id IS NOT NULL
-			UNION ALL
-			SELECT r.parent_id, a.distancia + 1
-			FROM ascendentes a JOIN referidos r ON r.id = a.id
-			WHERE r.parent_id IS NOT NULL AND a.distancia < 3
-		)
-		SELECT a.id, a.distancia, u.email
-		FROM ascendentes a
-		JOIN referidos r ON r.id = a.id
-		LEFT JOIN usuarios u ON u.id = r.usuario_id`, nodoID)
-	if err != nil {
-		return nil, err
-	}
-
-	type ascendente struct {
-		id, distancia int
-		email         *string
-	}
-	var lista []ascendente
-	for filas.Next() {
-		var a ascendente
-		if err := filas.Scan(&a.id, &a.distancia, &a.email); err != nil {
-			filas.Close()
+	if nuevo == domain.EstadoCancelado {
+		// Devolver el stock de cada ítem.
+		if _, err = tx.Exec(ctx, `
+			UPDATE productos p SET stock = p.stock + i.cantidad
+			FROM pedido_items i WHERE i.pedido_id = $1 AND i.producto_id = p.id`, id); err != nil {
 			return nil, err
 		}
-		lista = append(lista, a)
-	}
-	filas.Close()
-	if err := filas.Err(); err != nil {
-		return nil, err
-	}
-
-	// Emails cuyo árbol cambió: el comprador y los ascendentes que tienen cuenta.
-	var compradorEmail string
-	if err = tx.QueryRow(ctx, "SELECT email FROM usuarios WHERE id = $1", usuarioID).Scan(&compradorEmail); err != nil {
-		return nil, err
-	}
-	afectados := []string{compradorEmail}
-
-	for _, a := range lista {
-		monto := total * TasaComision[a.distancia]
-		if _, err = tx.Exec(ctx,
-			"UPDATE referidos SET comisiones = comisiones + $1 WHERE id = $2", monto, a.id); err != nil {
+		// Comisiones aún no pagadas: se anulan.
+		if _, err = tx.Exec(ctx, `
+			UPDATE comisiones SET estado = 'revertida'
+			WHERE pedido_id = $1 AND estado IN ('pendiente', 'aprobada') AND monto > 0`, id); err != nil {
 			return nil, err
 		}
-		if _, err = tx.Exec(ctx,
-			"INSERT INTO comisiones (pedido_id, referido_id, nivel, monto) VALUES ($1, $2, $3, $4)",
-			pedidoID, a.id, a.distancia, monto); err != nil {
+		// Comisiones ya pagadas: clawback, un cargo negativo que se descuenta en la próxima liquidación.
+		if _, err = tx.Exec(ctx, `
+			INSERT INTO comisiones (pedido_id, referido_id, nivel, porcentaje, monto, estado)
+			SELECT pedido_id, referido_id, nivel, porcentaje, -monto, 'pendiente'
+			FROM comisiones WHERE pedido_id = $1 AND estado = 'pagada' AND monto > 0`, id); err != nil {
 			return nil, err
 		}
-		if a.email != nil {
-			afectados = append(afectados, *a.email)
+		// El contador de ventas del comprador vuelve a su valor anterior.
+		if _, err = tx.Exec(ctx, `
+			UPDATE referidos SET ventas = GREATEST(ventas - $2, 0)
+			WHERE id = (SELECT referido_id FROM usuarios WHERE id = $1)`, usuarioID, total); err != nil {
+			return nil, err
 		}
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return afectados, nil
+	log.Printf("Pedido %s: %s → %s", numeroPedido(id), actual, nuevo)
+	return r.ObtenerPedido(ctx, id)
 }

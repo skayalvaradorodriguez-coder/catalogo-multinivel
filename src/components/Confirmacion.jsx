@@ -67,7 +67,7 @@ const Confirmacion = () => {
             <span className="text-2xl font-bold text-green-600">${pedido.total.toFixed(2)}</span>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <Link
               to="/tienda"
               className="flex-1 text-center bg-indigo-600 text-white font-semibold py-3 rounded-lg hover:bg-indigo-700 transition"
@@ -75,10 +75,10 @@ const Confirmacion = () => {
               Seguir Comprando
             </Link>
             <Link
-              to="/catalogo"
+              to="/mis-pedidos"
               className="flex-1 text-center border border-slate-300 text-slate-700 font-semibold py-3 rounded-lg hover:bg-slate-50 transition"
             >
-              Ver Catálogo
+              Ver Mis Pedidos
             </Link>
           </div>
         </div>
