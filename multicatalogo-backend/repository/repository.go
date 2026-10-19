@@ -1,114 +1,121 @@
 // Package repository es la capa de acceso a datos: aquí vive TODO el SQL.
-// Los controllers llaman a estas funciones y no conocen la base de datos.
+// Los controladores dependen de la interfaz DBRepository, no de PostgreSQL directamente.
 package repository
 
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
-	"multicatalogo-backend/config"
 	"multicatalogo-backend/models"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const columnasProducto = "id, nombre, descripcion, precio::float8, categoria, img, galeria"
+// Errores de dominio que los controladores traducen a códigos HTTP.
+var (
+	ErrNoEncontrado     = errors.New("no encontrado")                       // 404 (401 en login)
+	ErrDuplicado        = errors.New("ya existe")                           // 409
+	ErrCantidadInvalida = errors.New("la cantidad debe ser mayor que cero") // 400
+)
 
-// BuscarUsuarioPorCredenciales devuelve el usuario que coincide con email y password.
-// Si no existe devuelve (nil, nil); el error queda reservado para fallos de la base de datos.
-func BuscarUsuarioPorCredenciales(ctx context.Context, email, password string) (*models.Usuario, error) {
-	var u models.Usuario
-	err := config.DB.QueryRow(ctx,
-		"SELECT id, email, password, rol FROM usuarios WHERE email = $1 AND password = $2",
-		email, password,
-	).Scan(&u.ID, &u.Email, &u.Password, &u.Rol)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
+// ErrValidacion indica un problema con los datos (producto inexistente, stock insuficiente,
+// transición de estado no permitida...). El controlador lo traduce a HTTP 400.
+type ErrValidacion struct {
+	Mensaje string
 }
 
-// ObtenerProductos devuelve todo el catálogo ordenado por id.
-func ObtenerProductos(ctx context.Context) ([]models.Producto, error) {
-	filas, err := config.DB.Query(ctx, "SELECT "+columnasProducto+" FROM productos ORDER BY id")
-	if err != nil {
-		return nil, err
-	}
-	defer filas.Close()
+func (e *ErrValidacion) Error() string { return e.Mensaje }
 
-	// Slice no nulo: si la tabla está vacía el JSON es [] y no null.
-	productos := []models.Producto{}
-	for filas.Next() {
-		var p models.Producto
-		if err := filas.Scan(&p.ID, &p.Nombre, &p.Descripcion, &p.Precio, &p.Categoria, &p.Img, &p.Galeria); err != nil {
-			return nil, err
-		}
-		productos = append(productos, p)
-	}
-	return productos, filas.Err()
+func errValidacion(formato string, args ...interface{}) error {
+	return &ErrValidacion{Mensaje: fmt.Sprintf(formato, args...)}
 }
 
-// ObtenerProductoPorID devuelve un producto, o (nil, nil) si el id no existe.
-func ObtenerProductoPorID(ctx context.Context, id int) (*models.Producto, error) {
-	var p models.Producto
-	err := config.DB.QueryRow(ctx,
-		"SELECT "+columnasProducto+" FROM productos WHERE id = $1", id,
-	).Scan(&p.ID, &p.Nombre, &p.Descripcion, &p.Precio, &p.Categoria, &p.Img, &p.Galeria)
+// DBRepository es el contrato de la capa de datos que se inyecta en los controladores.
+type DBRepository interface {
+	Ping(ctx context.Context) error
 
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &p, nil
+	// Usuarios
+	BuscarUsuarioPorEmail(ctx context.Context, email string) (*models.Usuario, error)
+	BuscarUsuarioPorID(ctx context.Context, id int) (*models.Usuario, error)
+	RegistrarUsuario(ctx context.Context, nombre, email, hash, ref string) (*models.Usuario, error)
+	ListarUsuarios(ctx context.Context, q string, page, limit int) (models.Pagina[models.Usuario], error)
+	ActualizarUsuario(ctx context.Context, id int, cambios models.CambiosUsuario) (*models.Usuario, error)
+
+	// Productos
+	ObtenerProductos(ctx context.Context, q string) ([]models.Producto, error)
+	ObtenerProductoPorID(ctx context.Context, id int, incluirInactivos bool) (*models.Producto, error)
+	ListarProductosAdmin(ctx context.Context, q string, page, limit int) (models.Pagina[models.Producto], error)
+	CrearProducto(ctx context.Context, p models.Producto) (*models.Producto, error)
+	ActualizarProducto(ctx context.Context, id int, cambios models.ProductoInput) (*models.Producto, error)
+	DesactivarProducto(ctx context.Context, id int) error
+
+	// Red multinivel
+	ObtenerRed(ctx context.Context) (*models.Referido, error)
+	ObtenerSubRed(ctx context.Context, referidoID int) (*models.Referido, error)
+
+	// Pedidos
+	CrearPedido(ctx context.Context, pedido models.NuevoPedido) (*models.Pedido, error)
+	SumarVentas(ctx context.Context, usuarioID int, monto float64) error
+	ListarPedidos(ctx context.Context, filtro models.FiltroPedidos) (models.Pagina[models.PedidoResumen], error)
+	ObtenerPedido(ctx context.Context, id int) (*models.Pedido, error)
+	CambiarEstadoPedido(ctx context.Context, id int, nuevo string) (*models.Pedido, error)
+
+	// Comisiones y liquidaciones
+	EstadoCuenta(ctx context.Context, referidoID int) (*models.EstadoCuenta, error)
+	Liquidar(ctx context.Context, referidoID int) (*models.Liquidacion, error)
+	ListarLiquidaciones(ctx context.Context, referidoID *int, page, limit int) (models.Pagina[models.Liquidacion], error)
+
+	// Reportes
+	ResumenVentas(ctx context.Context, desde, hasta *time.Time) (*models.ResumenVentas, error)
+	TopProductos(ctx context.Context, limit int) ([]models.TopProducto, error)
+	TopReferidos(ctx context.Context, limit int) ([]models.TopReferido, error)
+	ComisionesPendientes(ctx context.Context) ([]models.DeudaComisiones, error)
 }
 
-// ObtenerRed lee la tabla referidos como lista plana y reconstruye el árbol en memoria.
-// Devuelve el nodo raíz (parent_id NULL), o (nil, nil) si la tabla está vacía.
-func ObtenerRed(ctx context.Context) (*models.Referido, error) {
-	filas, err := config.DB.Query(ctx,
-		"SELECT id, nombre, nivel, ventas::float8, parent_id FROM referidos ORDER BY id")
-	if err != nil {
-		return nil, err
-	}
-	defer filas.Close()
+// OpcionesCheckout permite provocar fallas a propósito para la demostración de ACID en clase.
+type OpcionesCheckout struct {
+	SimularFalla bool          // corta la transacción después de insertar el pedido
+	Pausa        time.Duration // espera antes del COMMIT (para detener PostgreSQL a mitad)
+}
 
-	nodos := map[int]*models.Referido{} // id -> nodo
-	padres := map[int]*int{}            // id -> parent_id (nil en la raíz)
-	var orden []int                     // conserva el orden por id
+// PostgresRepository implementa DBRepository con un pool de PostgreSQL.
+type PostgresRepository struct {
+	db       *pgxpool.Pool
+	opciones OpcionesCheckout
+}
 
-	for filas.Next() {
-		nodo := &models.Referido{}
-		var parentID *int
-		if err := filas.Scan(&nodo.ID, &nodo.Nombre, &nodo.Nivel, &nodo.Ventas, &parentID); err != nil {
-			return nil, err
-		}
-		nodos[nodo.ID] = nodo
-		padres[nodo.ID] = parentID
-		orden = append(orden, nodo.ID)
-	}
-	if err := filas.Err(); err != nil {
-		return nil, err
-	}
+// NuevoPostgresRepository crea el repositorio con sus dependencias.
+func NuevoPostgresRepository(db *pgxpool.Pool, opciones OpcionesCheckout) *PostgresRepository {
+	return &PostgresRepository{db: db, opciones: opciones}
+}
 
-	// Segunda pasada: colgamos cada nodo de su padre.
-	var raiz *models.Referido
-	for _, id := range orden {
-		parentID := padres[id]
-		if parentID == nil {
-			if raiz == nil {
-				raiz = nodos[id]
-			}
-			continue
-		}
-		if padre, existe := nodos[*parentID]; existe {
-			padre.Hijos = append(padre.Hijos, nodos[id])
-		}
+// Ping verifica que PostgreSQL responda (lo usa /api/health).
+func (r *PostgresRepository) Ping(ctx context.Context) error {
+	return r.db.Ping(ctx)
+}
+
+// codigoPG devuelve el código de error de PostgreSQL ("23505" = duplicado, "23503" = FK...).
+func codigoPG(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code
 	}
-	return raiz, nil
+	return ""
+}
+
+// paginar normaliza page/limit y calcula el OFFSET.
+func paginar(page, limit int) (int, int, int) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return page, limit, (page - 1) * limit
 }

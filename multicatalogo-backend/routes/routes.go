@@ -1,27 +1,54 @@
-// Declaramos el paquete routes, cuya única responsabilidad es registrar los endpoints de la API.
+// Package routes registra los endpoints de la API con sus middlewares de seguridad.
 package routes
 
 import (
-	// Importamos Fiber para poder recibir y configurar la instancia principal de la aplicación.
-	"github.com/gofiber/fiber/v2"
-	// Importamos nuestro paquete de controladores, donde residen las funciones que se ejecutarán en cada ruta.
 	"multicatalogo-backend/controllers"
+	"multicatalogo-backend/middleware"
+
+	"github.com/gofiber/fiber/v2"
 )
 
-// SetupRoutes es una función que recibe un puntero a la aplicación Fiber (*fiber.App) para inyectarle las rutas.
-func SetupRoutes(app *fiber.App) {
-	// Definimos una ruta HTTP POST en "/api/login" y la enlazamos a la función Login del paquete controllers.
-	app.Post("/api/login", controllers.Login)
+// SetupRoutes recibe la aplicación, los controladores ya inyectados y la clave JWT.
+// Regla: toda ruta de escritura lleva RequireAuth; las de administración, además, RequireAdmin.
+func SetupRoutes(app *fiber.App, ctl *controllers.Controllers, jwtSecret string) {
+	auth := middleware.RequireAuth(jwtSecret)
+	admin := middleware.RequireAdmin()
+	api := app.Group("/api")
 
-	// Definimos una ruta HTTP GET en "/api/productos" y la enlazamos a la función GetProductos del paquete controllers.
-	app.Get("/api/productos", controllers.GetProductos)
+	// Públicas
+	api.Get("/health", ctl.Health.Health)
+	api.Post("/login", ctl.Auth.Login)
+	api.Post("/register", ctl.Auth.Register)
+	api.Get("/productos", ctl.Productos.GetProductos)
+	api.Get("/productos/:id", ctl.Productos.GetProductoPorID)
 
-	// Producto individual por ID.
-	app.Get("/api/productos/:id", controllers.GetProductoPorID)
+	// Usuario autenticado (cualquier rol)
+	api.Get("/red/mia", auth, ctl.Red.GetMiRed)
+	api.Post("/checkout", auth, ctl.Checkout.Checkout)
+	api.Get("/pedidos/mios", auth, ctl.Pedidos.Mios) // antes que /pedidos/:id
+	api.Get("/pedidos/:id", auth, ctl.Pedidos.Detalle)
+	api.Get("/comisiones/mias", auth, ctl.Comisiones.Mias)
+	api.Get("/liquidaciones/mias", auth, ctl.Liquidaciones.Mias)
 
-	// Red multinivel de referidos (árbol jerárquico).
-	app.Get("/api/red", controllers.GetRed)
+	// Solo administrador
+	api.Get("/red", auth, admin, ctl.Red.GetRed)
 
-	// Verificación de estado del servidor.
-	app.Get("/api/health", controllers.Health)
+	api.Get("/admin/productos", auth, admin, ctl.Productos.ListarAdmin)
+	api.Post("/productos", auth, admin, ctl.Productos.Crear)
+	api.Put("/productos/:id", auth, admin, ctl.Productos.Actualizar)
+	api.Delete("/productos/:id", auth, admin, ctl.Productos.Desactivar)
+
+	api.Get("/pedidos", auth, admin, ctl.Pedidos.Listar)
+	api.Patch("/pedidos/:id/estado", auth, admin, ctl.Pedidos.CambiarEstado)
+
+	api.Get("/usuarios", auth, admin, ctl.Usuarios.Listar)
+	api.Patch("/usuarios/:id", auth, admin, ctl.Usuarios.Actualizar)
+
+	api.Post("/liquidaciones", auth, admin, ctl.Liquidaciones.Crear)
+	api.Get("/liquidaciones", auth, admin, ctl.Liquidaciones.Listar)
+
+	api.Get("/reportes/resumen", auth, admin, ctl.Reportes.Resumen)
+	api.Get("/reportes/top-productos", auth, admin, ctl.Reportes.TopProductos)
+	api.Get("/reportes/top-referidos", auth, admin, ctl.Reportes.TopReferidos)
+	api.Get("/reportes/comisiones-pendientes", auth, admin, ctl.Reportes.ComisionesPendientes)
 }

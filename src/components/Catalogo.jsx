@@ -111,7 +111,7 @@ const Catalogo = () => {
                 <p className="text-indigo-600 font-bold mt-2 mb-4">${prod.precio.toFixed(2)}</p>
                 <button
                   onClick={() => addToCart(prod)}
-                  className="mt-auto w-full bg-slate-900 text-white py-2 rounded text-sm hover:bg-indigo-600 transition"
+                  className="mt-auto w-full min-h-11 bg-slate-900 text-white py-2 rounded text-sm hover:bg-indigo-600 transition"
                 >
                   Añadir al Carrito
                 </button>

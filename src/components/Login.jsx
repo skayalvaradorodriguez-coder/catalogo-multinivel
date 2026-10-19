@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
-import { API_URL } from "../config";
+import { iniciarSesion } from "../services/usuariosService";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -10,7 +10,12 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
+
+  // Si la sesión sigue guardada, no tiene sentido mostrar el login.
+  if (isAuthenticated) {
+    return <Navigate to={user?.rol === "admin" ? "/" : "/tienda"} replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,126 +23,81 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Credenciales incorrectas");
-        return;
-      }
-
-      const rol = data.rol === "admin" ? "admin" : "cliente";
-
-      login({
-        email: data.email,
-        rol,
-      });
-
-      navigate(rol === "admin" ? "/" : "/tienda");
-    } catch {
-      setError(
-        "No se pudo conectar con el servidor. Verifica que el backend esté corriendo."
-      );
+      const data = await iniciarSesion(email, password);
+      login(data);
+      navigate(data.rol === "admin" ? "/" : "/tienda");
+    } catch (err) {
+      // El backend responde APIError { status, message, details }.
+      setError(err.mensajeCompleto ?? "Credenciales incorrectas");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-md p-8 border border-slate-200">
-        
-        {/* Encabezado */}
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-8">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-md p-6 sm:p-8 border border-slate-200">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-slate-900">
-            MultiCatálogo
-          </h2>
-
-          <p className="text-slate-500 mt-2">
-            Ingresa a tu cuenta para continuar
-          </p>
+          <h2 className="text-3xl font-bold text-slate-900">MultiCatálogo</h2>
+          <p className="text-slate-500 mt-2">Ingresa a tu cuenta para continuar</p>
         </div>
 
-        {/* Mensaje de error */}
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-6 text-center border border-red-200">
             {error}
           </div>
         )}
 
-        {/* Formulario */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Correo */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Correo Electrónico
-            </label>
-
+            <label className="block text-sm font-medium text-slate-700 mb-2">Correo Electrónico</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition"
               placeholder="admin@upse.edu.ec"
+              autoComplete="email"
               required
             />
           </div>
 
-          {/* Contraseña */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Contraseña
-            </label>
-
+            <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition"
               placeholder="••••••"
+              autoComplete="current-password"
               required
             />
           </div>
 
-          {/* Botón */}
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full min-h-11 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isLoading ? "Ingresando..." : "Iniciar Sesión"}
           </button>
         </form>
 
-        {/* Cuentas de prueba */}
+        <p className="text-center text-sm text-slate-600 mt-6">
+          ¿No tienes cuenta?{" "}
+          <Link to="/registro" className="text-indigo-600 font-semibold hover:underline">
+            Crear cuenta
+          </Link>
+        </p>
+
         <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 space-y-1">
-          <p className="font-semibold text-slate-700">
-            Cuentas de prueba:
-          </p>
-
+          <p className="font-semibold text-slate-700">Cuentas de prueba:</p>
           <p>
-            👑 Administrador:{" "}
-            <span className="font-mono">
-              admin@upse.edu.ec / 123456
-            </span>
+            👑 Administrador: <span className="font-mono">admin@upse.edu.ec / 123456</span>
           </p>
-
           <p>
-            🛍️ Cliente:{" "}
-            <span className="font-mono">
-              cliente@upse.edu.ec / 123456
-            </span>
+            🛍️ Cliente: <span className="font-mono">cliente@upse.edu.ec / 123456</span>
           </p>
         </div>
       </div>
@@ -146,4 +106,3 @@ const Login = () => {
 };
 
 export default Login;
-

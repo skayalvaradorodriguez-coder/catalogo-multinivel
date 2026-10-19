@@ -1,5 +1,8 @@
+import { useRed } from "../hooks/useRed";
+import MensajeError from "./MensajeError";
+import LinkReferido from "./LinkReferido";
+import MisComisiones from "./MisComisiones";
 import {
-  redInicial,
   contarRed,
   sumarVentasRed,
   sumarComisiones,
@@ -43,7 +46,7 @@ const NodoReferido = ({ nodo }) => {
       </div>
 
       {nodo.hijos && nodo.hijos.length > 0 && (
-        <ul className="mt-3 ml-6 space-y-3 border-l-2 border-slate-200 pl-4">
+        <ul className="mt-3 ml-2 sm:ml-6 space-y-3 border-l-2 border-slate-200 pl-2 sm:pl-4">
           {nodo.hijos.map((hijo) => (
             <NodoReferido key={hijo.id} nodo={hijo} />
           ))}
@@ -54,15 +57,21 @@ const NodoReferido = ({ nodo }) => {
 };
 
 const MiRed = () => {
-  const referidosActivos = contarRed(redInicial);
-  const ventasRed = sumarVentasRed(redInicial);
-  const comisionesMes = sumarComisiones(redInicial);
-  const nivel = nivelAlcanzado(redInicial.hijos?.length ?? 0);
+  // La red del usuario conectado llega desde GET /api/red/mia (su subárbol, con caché en Redis).
+  const { red, isLoading, error } = useRed();
+
+  if (isLoading) return <p className="text-slate-500">Cargando tu red...</p>;
+  if (error) return <MensajeError mensaje={error} />;
+
+  const referidosActivos = contarRed(red);
+  const ventasRed = sumarVentasRed(red);
+  const comisionesMes = sumarComisiones(red);
+  const nivel = nivelAlcanzado(red.hijos?.length ?? 0);
 
   const resumen = [
     { etiqueta: "Referidos Activos", valor: referidosActivos.toString(), color: "text-indigo-600" },
     { etiqueta: "Ventas de la Red", valor: `$${ventasRed.toLocaleString()}`, color: "text-indigo-600" },
-    { etiqueta: "Comisiones del Mes", valor: `$${comisionesMes.toFixed(2)}`, color: "text-green-600" },
+    { etiqueta: "Comisiones Estimadas", valor: `$${comisionesMes.toFixed(2)}`, color: "text-green-600" },
     { etiqueta: "Nivel Alcanzado", valor: nivel, color: "text-amber-600" },
   ];
 
@@ -74,6 +83,8 @@ const MiRed = () => {
         nivel 2 y {TASA_COMISION[3] * 100}% de nivel 3.
       </p>
 
+      {red.codigo && <LinkReferido codigo={red.codigo} />}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {resumen.map((item) => (
           <div key={item.etiqueta} className="bg-white p-6 rounded-lg shadow-sm border border-slate-100">
@@ -83,16 +94,16 @@ const MiRed = () => {
         ))}
       </div>
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 sm:p-6">
         <h2 className="text-lg font-bold text-slate-800 mb-4">Jerarquía de tu Red</h2>
 
         <div className="bg-slate-900 text-white rounded-lg p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center font-bold">
-              {redInicial.nombre.charAt(0)}
+              {red.nombre.charAt(0)}
             </div>
             <div>
-              <p className="font-semibold">{redInicial.nombre}</p>
+              <p className="font-semibold">{red.nombre}</p>
               <p className="text-xs text-slate-300">Nivel alcanzado: {nivel}</p>
             </div>
           </div>
@@ -100,10 +111,19 @@ const MiRed = () => {
         </div>
 
         <ul className="space-y-3">
-          {redInicial.hijos?.map((hijo) => (
+          {red.hijos?.map((hijo) => (
             <NodoReferido key={hijo.id} nodo={hijo} />
           ))}
         </ul>
+        {!red.hijos?.length && (
+          <p className="text-sm text-slate-500">
+            Todavía no tienes referidos. Comparte tu link de invitación para empezar a crecer tu red.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-8">
+        <MisComisiones />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-// Datos de ejemplo (mock) de la red multinivel de referidos: árbol jerárquico
-// + funciones puras para calcular comisiones, totales y el nivel alcanzado.
+// Funciones puras de la red multinivel: comisiones, totales y nivel alcanzado.
+// Son estimaciones a partir de las ventas; el monto oficial está en el ledger (/api/comisiones/mias).
 
 export const TASA_COMISION = {
   1: 0.1, // 10% de las ventas de nivel 1
@@ -7,38 +7,8 @@ export const TASA_COMISION = {
   3: 0.02, // 2% de las ventas de nivel 3
 };
 
-export const redInicial = {
-  id: 0,
-  nombre: "Tú",
-  nivel: 0,
-  ventas: 2400,
-  hijos: [
-    {
-      id: 1,
-      nombre: "Ana García",
-      nivel: 1,
-      ventas: 1200,
-      hijos: [
-        {
-          id: 4,
-          nombre: "Carlos Ruiz",
-          nivel: 2,
-          ventas: 500,
-          hijos: [{ id: 7, nombre: "Diana Paz", nivel: 3, ventas: 300 }],
-        },
-        { id: 5, nombre: "Sofía León", nivel: 2, ventas: 430 },
-      ],
-    },
-    {
-      id: 2,
-      nombre: "Luis Poveda",
-      nivel: 1,
-      ventas: 850,
-      hijos: [{ id: 6, nombre: "Marco Díaz", nivel: 2, ventas: 380 }],
-    },
-    { id: 3, nombre: "Marta Sánchez", nivel: 1, ventas: 430 },
-  ],
-};
+// Forma de un nodo (viene de GET /api/red/mia):
+// { id, nombre, nivel, ventas, codigo, hijos?: Nodo[] } — nivel relativo al usuario (él es 0).
 
 // Total de referidos de la red (sin contar al usuario raíz)
 export const contarRed = (raiz) => {

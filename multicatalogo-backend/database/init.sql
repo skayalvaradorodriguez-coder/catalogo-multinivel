@@ -1,22 +1,46 @@
--- Fase 2: estructura relacional y datos semilla de Multicatálogo.
+-- init.sql — Estructura completa y datos semilla de MultiCatálogo (instalación limpia).
 -- Docker lo ejecuta automáticamente la primera vez que se crea el volumen.
+-- Para una base existente usa las migraciones 002, 003 y 004 en orden.
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+DROP TABLE IF EXISTS comisiones;
+DROP TABLE IF EXISTS liquidaciones;
+DROP TABLE IF EXISTS pedido_items;
+DROP TABLE IF EXISTS pedidos;
+DROP TABLE IF EXISTS usuarios;
 DROP TABLE IF EXISTS referidos;
 DROP TABLE IF EXISTS productos;
-DROP TABLE IF EXISTS usuarios;
 
 -- ---------------------------------------------------------------------------
--- Usuarios (password en texto plano TEMPORALMENTE; se cifrará en otra fase).
+-- Red multinivel. parent_id apunta a la misma tabla para formar el árbol;
+-- la raíz ("Tú", la empresa) es la única fila con parent_id NULL.
 -- ---------------------------------------------------------------------------
-CREATE TABLE usuarios (
-    id       SERIAL PRIMARY KEY,
-    email    VARCHAR(150) NOT NULL UNIQUE,
-    password VARCHAR(150) NOT NULL,
-    rol      VARCHAR(20)  NOT NULL CHECK (rol IN ('admin', 'cliente'))
+CREATE TABLE referidos (
+    id        SERIAL PRIMARY KEY,
+    nombre    VARCHAR(150)   NOT NULL,
+    nivel     INT            NOT NULL CHECK (nivel >= 0),
+    ventas    NUMERIC(12, 2) NOT NULL DEFAULT 0,  -- contador de lectura rápida (el ledger es la verdad)
+    parent_id INT REFERENCES referidos (id) ON DELETE CASCADE,
+    codigo    VARCHAR(20) UNIQUE                 -- link de invitación /registro?ref=CODIGO
 );
 
 -- ---------------------------------------------------------------------------
--- Productos del catálogo. "galeria" es un arreglo de URLs de imágenes.
+-- Usuarios. password = hash bcrypt; referido_id = su nodo en la red.
+-- ---------------------------------------------------------------------------
+CREATE TABLE usuarios (
+    id          SERIAL PRIMARY KEY,
+    email       VARCHAR(150) NOT NULL UNIQUE,
+    password    VARCHAR(100) NOT NULL,
+    rol         VARCHAR(20)  NOT NULL CHECK (rol IN ('admin', 'cliente')),
+    nombre      VARCHAR(150) NOT NULL DEFAULT '',
+    activo      BOOLEAN      NOT NULL DEFAULT true,
+    referido_id INT UNIQUE REFERENCES referidos (id),
+    creado_en   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------------
+-- Productos del catálogo. "galeria" es un arreglo de URLs; activo = borrado lógico.
 -- ---------------------------------------------------------------------------
 CREATE TABLE productos (
     id          SERIAL PRIMARY KEY,
@@ -25,29 +49,94 @@ CREATE TABLE productos (
     precio      NUMERIC(10, 2) NOT NULL CHECK (precio >= 0),
     categoria   VARCHAR(50)    NOT NULL DEFAULT '',
     img         TEXT           NOT NULL DEFAULT '',
-    galeria     TEXT[]         NOT NULL DEFAULT '{}'
+    galeria     TEXT[]         NOT NULL DEFAULT '{}',
+    stock       INT            NOT NULL DEFAULT 50 CHECK (stock >= 0),
+    activo      BOOLEAN        NOT NULL DEFAULT true
 );
 
 -- ---------------------------------------------------------------------------
--- Red multinivel. parent_id apunta a la misma tabla para formar el árbol;
--- la raíz ("Tú") es la única fila con parent_id NULL.
+-- Pedidos y su detalle.
 -- ---------------------------------------------------------------------------
-CREATE TABLE referidos (
-    id        SERIAL PRIMARY KEY,
-    nombre    VARCHAR(150)   NOT NULL,
-    nivel     INT            NOT NULL CHECK (nivel >= 0),
-    ventas    NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    parent_id INT REFERENCES referidos (id) ON DELETE CASCADE
+CREATE TABLE pedidos (
+    id             SERIAL PRIMARY KEY,
+    usuario_id     INT            NOT NULL REFERENCES usuarios (id),
+    cliente_nombre VARCHAR(150)   NOT NULL,
+    cliente_email  VARCHAR(150)   NOT NULL,
+    direccion      TEXT           NOT NULL,
+    ciudad         VARCHAR(100)   NOT NULL,
+    telefono       VARCHAR(30)    NOT NULL,
+    metodo_pago    VARCHAR(50)    NOT NULL,
+    total          NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    estado         VARCHAR(20)    NOT NULL DEFAULT 'pendiente'
+                   CONSTRAINT pedidos_estado_check
+                   CHECK (estado IN ('pendiente', 'preparando', 'enviado', 'entregado', 'cancelado')),
+    creado_en      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_referidos_parent ON referidos (parent_id);
+CREATE TABLE pedido_items (
+    id              SERIAL PRIMARY KEY,
+    pedido_id       INT            NOT NULL REFERENCES pedidos (id) ON DELETE CASCADE,
+    producto_id     INT            NOT NULL REFERENCES productos (id),
+    cantidad        INT            NOT NULL CHECK (cantidad > 0),
+    precio_unitario NUMERIC(10, 2) NOT NULL
+);
+
+-- ---------------------------------------------------------------------------
+-- Liquidaciones (pagos a distribuidores) y ledger de comisiones.
+-- ---------------------------------------------------------------------------
+CREATE TABLE liquidaciones (
+    id          SERIAL PRIMARY KEY,
+    referido_id INT            NOT NULL REFERENCES referidos (id),
+    total       NUMERIC(12, 2) NOT NULL CHECK (total > 0),
+    estado      VARCHAR(20)    NOT NULL DEFAULT 'pagada' CHECK (estado IN ('pendiente', 'pagada')),
+    creado_en   TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+    pagada_en   TIMESTAMPTZ
+);
+
+CREATE TABLE comisiones (
+    id             SERIAL PRIMARY KEY,
+    pedido_id      INT            NOT NULL REFERENCES pedidos (id) ON DELETE CASCADE,
+    referido_id    INT            NOT NULL REFERENCES referidos (id) ON DELETE CASCADE,
+    nivel          INT            NOT NULL CHECK (nivel BETWEEN 1 AND 3),
+    porcentaje     NUMERIC(5, 2)  NOT NULL DEFAULT 0,
+    monto          NUMERIC(12, 2) NOT NULL,
+    estado         VARCHAR(20)    NOT NULL DEFAULT 'pendiente'
+                   CONSTRAINT comisiones_estado_check
+                   CHECK (estado IN ('pendiente', 'aprobada', 'pagada', 'revertida')),
+    liquidacion_id INT REFERENCES liquidaciones (id),
+    creado_en      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------------
+-- Índices
+-- ---------------------------------------------------------------------------
+CREATE INDEX idx_referidos_parent            ON referidos (parent_id);
+CREATE INDEX idx_productos_categoria         ON productos (categoria);
+CREATE INDEX idx_pedidos_email               ON pedidos (cliente_email);
+CREATE INDEX idx_pedidos_usuario             ON pedidos (usuario_id);
+CREATE INDEX idx_pedidos_estado              ON pedidos (estado);
+CREATE INDEX idx_pedido_items_pedido         ON pedido_items (pedido_id);
+CREATE INDEX idx_comisiones_referido_pedido  ON comisiones (referido_id, pedido_id);
+CREATE INDEX idx_comisiones_estado           ON comisiones (estado);
 
 -- ---------------------------------------------------------------------------
 -- Datos semilla
 -- ---------------------------------------------------------------------------
-INSERT INTO usuarios (id, email, password, rol) VALUES
-    (1, 'admin@upse.edu.ec',   '123456', 'admin'),
-    (2, 'cliente@upse.edu.ec', '123456', 'cliente');
+-- Los padres se insertan antes que sus hijos para respetar la clave foránea.
+INSERT INTO referidos (id, nombre, nivel, ventas, parent_id, codigo) VALUES
+    (0, 'Tú',            0, 2400, NULL, 'TU'),
+    (1, 'Ana García',    1, 1200, 0,    'ANA'),
+    (2, 'Luis Poveda',   1,  850, 0,    'LUIS'),
+    (3, 'Marta Sánchez', 1,  430, 0,    'MARTA'),
+    (4, 'Carlos Ruiz',   2,  500, 1,    'CARLOS'),
+    (5, 'Sofía León',    2,  430, 1,    'SOFIA'),
+    (6, 'Marco Díaz',    2,  380, 2,    'MARCO'),
+    (7, 'Diana Paz',     3,  300, 4,    'DIANA');
+
+-- Contraseñas hasheadas con bcrypt (ambas son "123456").
+INSERT INTO usuarios (id, email, password, rol, nombre, referido_id) VALUES
+    (1, 'admin@upse.edu.ec',   crypt('123456', gen_salt('bf', 10)), 'admin',   'Administrador', 0),
+    (2, 'cliente@upse.edu.ec', crypt('123456', gen_salt('bf', 10)), 'cliente', 'Cliente Demo',  2);
 
 INSERT INTO productos (id, nombre, descripcion, precio, categoria, img, galeria) VALUES
     (1, 'Serum Revitalizante',
@@ -82,17 +171,6 @@ INSERT INTO productos (id, nombre, descripcion, precio, categoria, img, galeria)
         'Kit integral con suero, crema, tónico y mascarilla. La rutina perfecta para comenzar: limpieza, tratamiento e hidratación.',
         129.00, 'Kit', 'https://picsum.photos/seed/kit/600',
         ARRAY['https://picsum.photos/seed/kit1/600', 'https://picsum.photos/seed/kit2/600', 'https://picsum.photos/seed/kit3/600']);
-
--- Los padres se insertan antes que sus hijos para respetar la clave foránea.
-INSERT INTO referidos (id, nombre, nivel, ventas, parent_id) VALUES
-    (0, 'Tú',            0, 2400, NULL),
-    (1, 'Ana García',    1, 1200, 0),
-    (2, 'Luis Poveda',   1,  850, 0),
-    (3, 'Marta Sánchez', 1,  430, 0),
-    (4, 'Carlos Ruiz',   2,  500, 1),
-    (5, 'Sofía León',    2,  430, 1),
-    (6, 'Marco Díaz',    2,  380, 2),
-    (7, 'Diana Paz',     3,  300, 4);
 
 -- Como insertamos ids explícitos, adelantamos las secuencias para los próximos INSERT.
 SELECT setval(pg_get_serial_sequence('usuarios', 'id'),  (SELECT MAX(id) FROM usuarios));

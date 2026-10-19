@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
+import { enviarPedido } from "../services/checkoutService";
 
 const METODOS_PAGO = ["Tarjeta de crédito", "Transferencia bancaria", "Efectivo contra entrega"];
 
@@ -17,6 +18,7 @@ const Checkout = () => {
     metodoPago: METODOS_PAGO[0],
   });
   const [procesando, setProcesando] = useState(false);
+  const [error, setError] = useState("");
 
   if (cart.length === 0) {
     return (
@@ -33,26 +35,38 @@ const Checkout = () => {
     setDatos((prev) => ({ ...prev, [campo]: valor }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     setProcesando(true);
 
-    setTimeout(() => {
+    try {
+      // El backend guarda el pedido en PostgreSQL (BEGIN ... COMMIT). El comprador se identifica
+      // con el token de la sesión (apiFetch lo envía solo), no con datos del formulario.
+      const { metodoPago, ...cliente } = datos;
+      const guardado = await enviarPedido({
+        cliente,
+        metodoPago,
+        items: cart.map((item) => ({ id: item.id, cantidad: item.cantidad })),
+      });
+
+      // Usamos los precios y el total que calculó el servidor.
       const pedido = {
-        numero: `MC-${Date.now().toString().slice(-6)}`,
-        items: cart.map((item) => ({
-          nombre: item.nombre,
-          cantidad: item.cantidad,
-          precio: item.precio,
-        })),
-        total: totalPrice,
-        cliente: { nombre: datos.nombre, email: datos.email, ciudad: datos.ciudad },
-        fecha: new Date().toLocaleString("es-EC"),
+        numero: guardado.numero,
+        items: guardado.items,
+        total: guardado.total,
+        cliente: { nombre: guardado.cliente.nombre, email: guardado.cliente.email, ciudad: guardado.cliente.ciudad },
+        fecha: new Date(guardado.creadoEn).toLocaleString("es-EC"),
       };
 
       clearCart();
       navigate("/confirmacion", { state: { pedido } });
-    }, 1200);
+    } catch (err) {
+      // Si la transacción falló (ROLLBACK), nos quedamos en el formulario y el carrito se conserva.
+      setError(err.mensajeCompleto ?? err.message);
+    } finally {
+      setProcesando(false);
+    }
   };
 
   return (
@@ -139,10 +153,17 @@ const Checkout = () => {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm border border-red-200">
+              <p className="font-semibold">No se pudo completar la compra</p>
+              <p>{error}</p>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={procesando}
-            className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full min-h-11 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {procesando ? "Procesando pago..." : "Confirmar Pedido"}
           </button>
