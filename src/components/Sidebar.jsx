@@ -43,8 +43,8 @@ const Sidebar = ({ isCollapsed, isMobileOpen, setIsMobileOpen }) => {
         className="p-6 text-2xl font-bold border-b border-teal-600 truncate"
         style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}
       >
-        <span className={isCollapsed ? "md:hidden" : ""}>MultiCatálogo</span>
-        {isCollapsed && <span className="hidden md:inline">MC</span>}
+        <span className={isCollapsed ? "md:hidden" : ""}>Skay Alvarado</span>
+        {isCollapsed && <span className="hidden md:inline">SA</span>}
       </div>
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {visibles.map(({ to, label, icon: Icon }) => {
