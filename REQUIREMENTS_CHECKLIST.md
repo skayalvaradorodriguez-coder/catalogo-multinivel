@@ -27,7 +27,7 @@
 |---|---|
 | **Hito actual** | **Unidades 1 y 2 completadas** + back-office del plan `PLAN_IMPLEMENTACION_U2.md` (fases 0-7) |
 | **Última tarea completada** | Seguridad U2-T4 (bcrypt + JWT + RequireAuth/RequireAdmin + identidad por token) y back-office: registro con referido, CRUD productos, pedidos con estados, ledger de comisiones, liquidaciones, reportes, paginación (2026-10-19) |
-| **Siguiente tarea pendiente** | U3-T1: scaffold FastAPI (capa SaaS) cuando el profesor la publique |
+| **Siguiente tarea pendiente** | PWA-0 del plan `PLAN_PWA.md` (logo, íconos y metadatos); luego U3-T1 cuando el profesor la publique |
 | **Bloqueadores** | Ninguno |
 
 ## Arquitectura objetivo del semestre
@@ -123,6 +123,78 @@ React SPA (:5173) ──► Caddy/Nginx (U4: proxy inverso + SSL)
 
 - [x] `go test ./...` — `domain` (reparto 10/5/2 %, redondeo, transiciones de estado) y `seguridad` (JWT válido/adulterado/otra clave/vencido, bcrypt)
 - [x] `npm run lint` (0/0) y `npm run build`
+
+---
+
+# PWA — APLICACIÓN WEB PROGRESIVA (PLAN_PWA.md)
+
+> Convierte el frontend en una app **instalable** que abre **sin conexión** y avisa de
+> versiones nuevas. Herramienta: `vite-plugin-pwa` 2.x (Workbox). El backend no cambia.
+> Regla de privacidad: nunca se cachean datos con token ni peticiones de escritura.
+
+## PWA-0 · Identidad visual y metadatos
+
+- [ ] Logo propio `public/logo.svg` (reemplaza el `favicon.svg` de Vite)
+- [ ] Íconos PNG 192, 512, maskable 512, apple-touch 180 y `favicon.ico` (`@vite-pwa/assets-generator`)
+- [ ] `index.html`: `lang="es"`, título "MultiCatálogo", `description`, `theme-color`, etiquetas iOS
+- [ ] Borrar assets de plantilla sin uso (`react.svg`, `vite.svg`, `icons.svg`)
+
+## PWA-1 · Manifiesto web
+
+- [ ] `vite-plugin-pwa` instalado y registrado en `vite.config.js`
+- [ ] Manifiesto: nombre, `lang: es`, `start_url`/`scope` "/", `display: standalone`, colores, categorías
+- [ ] Íconos 192/512/maskable en el manifiesto
+- [ ] Atajos: Catálogo, Mis Pedidos, Mi Red
+- [ ] Capturas vertical y horizontal para el diálogo de instalación
+- [ ] Verificado: DevTools → Application → Manifest sin errores
+
+## PWA-2 · Service worker y app shell
+
+- [ ] `generateSW` con `registerType: "prompt"` y precache de la build
+- [ ] `navigateFallback: /index.html` (rutas de React Router sin red) y `navigateFallbackDenylist: /api/`
+- [ ] `cleanupOutdatedCaches` y `devOptions` para probar en desarrollo
+- [ ] Verificado: con DevTools en Offline, `/catalogo` abre tras recargar
+
+## PWA-3 · Estrategias de caché
+
+- [ ] `GET /api/productos[/:id]` → StaleWhileRevalidate (50 entradas, 24 h)
+- [ ] Imágenes de productos → CacheFirst (200 entradas, 30 días)
+- [ ] Login, registro, checkout, escrituras y rutas privadas/admin → NetworkOnly
+- [ ] Cachés con prefijo `multicatalogo-`
+- [ ] Verificado: catálogo e imágenes visibles offline; Cache Storage sin pedidos, red, comisiones ni admin
+
+## PWA-4 · Experiencia sin conexión
+
+- [ ] Hook `useOnline` + `BannerSinConexion` en el `Layout`
+- [ ] `apiFetch` devuelve "Sin conexión..." sin intentar la petición
+- [ ] Checkout bloqueado offline (el carrito se conserva)
+- [ ] Mensaje "Necesitas conexión" en Mis Pedidos, Mi Red, admin, login y registro
+- [ ] Verificado: Offline → banner, catálogo y carrito funcionan; Online → banner desaparece
+
+## PWA-5 · Actualizaciones e instalación
+
+- [ ] `AvisoActualizacion` ("Hay una nueva versión — Actualizar") con `useRegisterSW`
+- [ ] Revisión de actualizaciones cada 60 min
+- [ ] Botón "Instalar app" (`beforeinstallprompt`), oculto si ya está instalada
+- [ ] Instrucciones para iPhone (Compartir → Agregar a pantalla de inicio)
+- [ ] `safe-area-inset` en Navbar/Sidebar para el modo instalado
+- [ ] Verificado: nueva build → aviso → carga la versión nueva; la app se instala en escritorio
+
+## PWA-6 · Seguridad, privacidad y HTTPS
+
+- [ ] Cerrar sesión / 401 borra las cachés de API (`caches.delete`)
+- [ ] Ninguna regla de caché coincide con peticiones con `Authorization`
+- [ ] Proxy de Vite `/api → 127.0.0.1:3000`: mismo origen, sin CORS ni contenido mixto
+- [ ] HTTPS local para el celular (mkcert o túnel cloudflared/ngrok) documentado en `README.md`
+- [ ] Verificado: tras cerrar sesión Cache Storage queda sin datos; la app se instala en el celular por HTTPS
+
+## PWA-7 · Verificación final y documentación
+
+- [ ] Application: manifiesto OK, service worker activo, app instalable
+- [ ] Lighthouse ≥ 90 en Performance, Accessibility, Best Practices y SEO (build de producción)
+- [ ] Prueba real en Android (Chrome) e iPhone (Safari): instalar, offline, actualización
+- [ ] Prueba de privacidad con dos usuarios en el mismo navegador
+- [ ] `npm run lint` 0/0, `npm run build` sin advertencias; PROJECT_MAP y checklist al día; capturas de evidencia
 
 ---
 

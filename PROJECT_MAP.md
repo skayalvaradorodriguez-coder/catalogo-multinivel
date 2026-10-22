@@ -19,6 +19,7 @@ React SPA (:5173) ──apiFetch + JWT──► Go/Fiber API (:3000, env PORT) �
 | `PROJECT_MAP.md` | Este archivo. Índice de navegación del proyecto. |
 | `REQUIREMENTS_CHECKLIST.md` | Estado por Unidad/Tema del sílabo (U1 SPA → U2 Go/Fiber → U3 → U4) + back-office. |
 | `PLAN_IMPLEMENTACION_U2.md` | Plan del profesor (fases 0-7 del back-office) con notas de cómo quedó en este repo. |
+| `PLAN_PWA.md` | Plan para convertir el frontend en PWA (fases PWA-0 a PWA-7): manifiesto, service worker, caché, offline, instalación, HTTPS. |
 | `ANALISIS_FUNCIONAL_U2.md` | Análisis de brecha funcional del profesor + estado de cada punto en este repo. |
 | `README.md` | Cómo instalar, migrar la base y correr el proyecto. |
 | `.windsurfrules` | Reglas del agente IA (ahorro de tokens, navegación, seguimiento). |
