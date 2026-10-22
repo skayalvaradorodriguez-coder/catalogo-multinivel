@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import { enviarPedido } from "../services/checkoutService";
+import { useOnline } from "../hooks/useOnline";
 
 const METODOS_PAGO = ["Tarjeta de crédito", "Transferencia bancaria", "Efectivo contra entrega"];
 
 const Checkout = () => {
   const { cart, totalPrice, clearCart } = useCart();
   const navigate = useNavigate();
+  const online = useOnline();
 
   const [datos, setDatos] = useState({
     nombre: "",
@@ -160,9 +162,15 @@ const Checkout = () => {
             </div>
           )}
 
+          {!online && (
+            <p className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm border border-amber-200">
+              Estás sin conexión. Tu carrito se conserva; podrás confirmar el pedido cuando vuelvas a tener internet.
+            </p>
+          )}
+
           <button
             type="submit"
-            disabled={procesando}
+            disabled={procesando || !online}
             className="w-full min-h-11 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {procesando ? "Procesando pago..." : "Confirmar Pedido"}

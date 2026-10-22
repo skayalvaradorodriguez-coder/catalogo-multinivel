@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>MultiCatálogo</title>
+  <!-- Fondo de borde a borde: el ícono "maskable" puede recortarse en círculo o en gota. -->
+  <rect width="512" height="512" fill="#0f766e"/>
+  <!-- Red multinivel: un nodo arriba que se ramifica en tres (todo dentro de la zona segura del 80 %). -->
+  <g transform="translate(256 256) scale(1.15) translate(-256 -229)">
+  <g stroke="#ccfbf1" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.9">
+    <path d="M256 168 L160 300"/>
+    <path d="M256 168 L256 300"/>
+    <path d="M256 168 L352 300"/>
+  </g>
+  <circle cx="256" cy="150" r="46" fill="#ffffff"/>
+  <circle cx="160" cy="318" r="36" fill="#ffffff"/>
+  <circle cx="256" cy="318" r="36" fill="#fbbf24"/>
+  <circle cx="352" cy="318" r="36" fill="#ffffff"/>
+  <!-- "M" de MultiCatálogo dentro del nodo principal -->
+  <path d="M232 168 V134 L256 158 L280 134 V168" stroke="#0f766e" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>

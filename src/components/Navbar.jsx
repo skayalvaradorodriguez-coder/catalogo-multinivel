@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { useCart } from "../context/useCart";
 import { useAuth } from "../context/useAuth";
+import InstalarApp from "./InstalarApp";
 
 const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
   const { totalItems } = useCart();
@@ -36,7 +37,10 @@ const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
   }, []);
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+    <header
+      className="bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8"
+      style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(4rem + env(safe-area-inset-top))" }}
+    >
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
         <button
           onClick={handleMenuClick}
@@ -98,6 +102,7 @@ const Navbar = ({ isCollapsed, setIsCollapsed, setIsMobileOpen }) => {
                 >
                   Mi red y comisiones
                 </Link>
+                <InstalarApp alTerminar={() => setIsProfileOpen(false)} />
                 <button
                   onClick={() => {
                     setIsProfileOpen(false);

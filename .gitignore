@@ -25,3 +25,6 @@ dist-ssr
 
 # Variables de entorno locales
 .env
+
+# Service worker generado por vite-plugin-pwa en modo desarrollo
+dev-dist

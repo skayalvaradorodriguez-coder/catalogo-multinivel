@@ -54,6 +54,37 @@ cd multicatalogo-backend
 powershell -ExecutionPolicy Bypass -File scripts\prueba-api.ps1 -Email tu@correo.com
 ```
 
+## App instalable (PWA)
+
+El frontend es una PWA: se instala como app y el catálogo se puede consultar sin conexión.
+El service worker solo se activa con la build de producción o en `npm run dev`, y siempre en
+`localhost` o con HTTPS.
+
+**En la computadora** (con el backend corriendo):
+```bash
+npm run build
+npm run preview
+```
+Abre http://localhost:4173 → menú de perfil → **Instalar app** (o el ícono de instalar en la barra de direcciones).
+
+**En el celular** (necesita HTTPS): con `npm run preview` corriendo, en otra terminal:
+```bash
+npx cloudflared tunnel --url http://localhost:4173
+```
+Si el túnel repite errores `QUIC` o `unreachable network`, tu red bloquea UDP/IPv6; usa:
+```bash
+npx cloudflared tunnel --protocol http2 --edge-ip-version 4 --url http://127.0.0.1:4173
+```
+Abre en el celular la dirección `https://...trycloudflare.com` que aparece. En Android: menú ⋮ →
+*Instalar app*. En iPhone (Safari): *Compartir → Agregar a pantalla de inicio*.
+Para que funcione por el túnel, `VITE_API_URL` debe estar **vacía** en el `.env` de la raíz
+(la app llama a `/api` y Vite lo reenvía al backend).
+
+**Probar sin conexión:** DevTools → Application → Service workers → *Offline*, o apaga el backend:
+el catálogo visitado y el carrito siguen funcionando; comprar y las vistas privadas piden conexión.
+
+**Íconos:** se generan desde `public/logo.svg` con `npm run generar-iconos`.
+
 ## Con Docker (opcional)
 
 ```bash

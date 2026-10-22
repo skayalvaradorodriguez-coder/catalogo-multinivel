@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
+import { useOnline } from "../hooks/useOnline";
+import BannerSinConexion from "./BannerSinConexion";
 import { registrarse } from "../services/usuariosService";
 
 // Vista pública /registro. Si llega con ?ref=CODIGO (link de invitación), el código se rellena solo
@@ -8,6 +10,7 @@ import { registrarse } from "../services/usuariosService";
 const Registro = () => {
   const [params] = useSearchParams();
   const { login, isAuthenticated } = useAuth();
+  const online = useOnline();
   const navigate = useNavigate();
 
   const [datos, setDatos] = useState({
@@ -43,7 +46,9 @@ const Registro = () => {
     "w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-8">
+    <div className="min-h-screen flex flex-col bg-slate-100">
+      <BannerSinConexion />
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="max-w-md w-full bg-white rounded-xl shadow-md p-6 sm:p-8 border border-slate-200">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-slate-900">Crear cuenta</h2>
@@ -59,14 +64,26 @@ const Registro = () => {
         {/* Mobile-first: un campo por fila */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Nombre completo *</label>
-            <input className={input} value={datos.nombre} onChange={cambiar("nombre")} autoComplete="name" required />
+            <label htmlFor="reg-nombre" className="block text-sm font-medium text-slate-700 mb-2">
+              Nombre completo *
+            </label>
+            <input
+              id="reg-nombre"
+              className={input}
+              value={datos.nombre}
+              onChange={cambiar("nombre")}
+              autoComplete="name"
+              required
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Correo electrónico *</label>
+            <label htmlFor="reg-email" className="block text-sm font-medium text-slate-700 mb-2">
+              Correo electrónico *
+            </label>
             <input
               type="email"
               className={input}
+              id="reg-email"
               value={datos.email}
               onChange={cambiar("email")}
               autoComplete="email"
@@ -74,10 +91,13 @@ const Registro = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña * (mínimo 6 caracteres)</label>
+            <label htmlFor="reg-password" className="block text-sm font-medium text-slate-700 mb-2">
+              Contraseña * (mínimo 6 caracteres)
+            </label>
             <input
               type="password"
               className={input}
+              id="reg-password"
               value={datos.password}
               onChange={cambiar("password")}
               minLength={6}
@@ -86,9 +106,12 @@ const Registro = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Código de referido (opcional)</label>
+            <label htmlFor="reg-ref" className="block text-sm font-medium text-slate-700 mb-2">
+              Código de referido (opcional)
+            </label>
             <input
               className={`${input} uppercase font-mono`}
+              id="reg-ref"
               value={datos.ref}
               onChange={cambiar("ref")}
               placeholder="Ej. LUIS"
@@ -98,7 +121,7 @@ const Registro = () => {
 
           <button
             type="submit"
-            disabled={enviando}
+            disabled={!online || enviando}
             className="w-full min-h-11 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition disabled:opacity-60"
           >
             {enviando ? "Creando cuenta..." : "Crear cuenta"}
@@ -111,6 +134,7 @@ const Registro = () => {
             Inicia sesión
           </Link>
         </p>
+      </div>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import AdminLiquidaciones from "./components/admin/AdminLiquidaciones";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
 import { useAuth } from "./context/useAuth";
+import AvisoActualizacion from "./components/AvisoActualizacion";
 
 // Exige estar autenticado (cualquier rol)
 const ProtectedRoute = () => {
@@ -76,6 +77,7 @@ function App() {
             <Route path="*" element={<Navigate to="/tienda" replace />} />
           </Routes>
         </BrowserRouter>
+        <AvisoActualizacion />
       </CartBoundary>
     </AuthProvider>
   );

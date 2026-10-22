@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import BannerSinConexion from "./BannerSinConexion";
 
 const Layout = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -29,7 +30,11 @@ const Layout = () => {
           setIsCollapsed={setIsCollapsed}
           setIsMobileOpen={setIsMobileOpen}
         />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <BannerSinConexion />
+        <main
+          className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
           <Outlet />
         </main>
       </div>
