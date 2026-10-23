@@ -204,8 +204,8 @@ React SPA (:5173) ──► Caddy/Nginx (U4: proxy inverso + SSL)
 - [x] Conexión por `DATABASE_URL` con SSL (Neon); en local sigue funcionando con `DB_*`
 - [x] `Dockerfile` único en la raíz (Node → Go → Alpine) y `render.yaml` (Blueprint: web Free + Key Value Free)
 - [x] Prueba local del modo producción: un servidor en :3000 con app + API, base nueva cargada solo con `init.sql`, login, compra, caché HIT, service worker activo
-- [ ] Base creada en Neon y `init.sql` ejecutado en su SQL Editor
-- [ ] Blueprint desplegado en Render y link `https://….onrender.com` verificado (login, compra, admin, instalar en el celular)
+- [x] Base creada en Neon (Oregón) y `init.sql` ejecutado en su SQL Editor (2026-10-23)
+- [x] Blueprint desplegado en Render: https://multicatalogo-xg4h.onrender.com — health OK (PostgreSQL y Redis), login, 8 productos, caché HIT, manifiesto y service worker (2026-10-23)
 - [ ] Link enviado al ingeniero
 
 ---
