@@ -97,6 +97,8 @@ Capas: `routes` (+ `middleware`) → `controllers` → `repository` / `cache` (i
 | `database/init.sql` | Instalación limpia: todas las tablas + seed (passwords con bcrypt). |
 | `database/002_checkout.sql` `003_seguridad.sql` `004_backoffice.sql` | Migraciones idempotentes para una base existente (aplicar en orden). |
 | `docker-compose.yml` `Dockerfile` | Postgres 16 + Redis + backend con healthchecks. |
+| `routes/frontend.go` | `ServirFrontend`: con `STATIC_DIR` el backend entrega también la app React (SPA + PWA). |
+| `../Dockerfile` `../render.yaml` | Imagen única (frontend + backend) y Blueprint de Render para la nube — ver `DESPLIEGUE.md`. |
 | `.env` (gitignored) / `.env.example` | `PORT`, `APP_ENV`, `JWT_SECRET`, `DB_*`, `REDIS_*`, simulación de fallas. |
 
 ## Endpoints

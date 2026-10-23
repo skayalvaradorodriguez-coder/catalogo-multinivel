@@ -93,8 +93,20 @@ docker compose up -d --build
 ```
 Levanta PostgreSQL, Redis y el backend. El volumen nuevo ejecuta `init.sql` automáticamente.
 
+## En la nube (gratis, un solo link)
+
+La app se publica en **Render** (app + API en un solo servidor Docker) con la base de datos en
+**Neon** y Redis en **Render Key Value**, todo en planes gratuitos. Paso a paso en
+[`DESPLIEGUE.md`](DESPLIEGUE.md).
+
+- `Dockerfile` (raíz): compila frontend y backend en una sola imagen.
+- `render.yaml`: Blueprint con el servicio web y el Redis.
+- Variables nuevas del backend: `DATABASE_URL` (cadena de Neon, tiene prioridad sobre `DB_*`) y
+  `STATIC_DIR` (carpeta de la build del frontend que el backend entrega en `/`).
+
 ## Documentación
 
+- Despliegue en la nube: [`DESPLIEGUE.md`](DESPLIEGUE.md)
 - Mapa del proyecto y endpoints: [`PROJECT_MAP.md`](PROJECT_MAP.md)
 - Estado de tareas: [`REQUIREMENTS_CHECKLIST.md`](REQUIREMENTS_CHECKLIST.md)
 - Plan del back-office: [`PLAN_IMPLEMENTACION_U2.md`](PLAN_IMPLEMENTACION_U2.md)

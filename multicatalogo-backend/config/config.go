@@ -16,6 +16,10 @@ type Config struct {
 
 	CORSOrigins string // CORS_ORIGINS: orígenes permitidos separados por coma
 
+	// StaticDir: carpeta con la build del frontend (dist). Si se define, el mismo servidor
+	// entrega la app y la API en un solo dominio (así se despliega en la nube).
+	StaticDir string
+
 	SimularFallaCheckout bool          // SIMULAR_FALLA_CHECKOUT
 	PausaCheckout        time.Duration // CHECKOUT_PAUSA_SEGUNDOS
 }
@@ -30,6 +34,7 @@ func CargarConfig() (Config, error) {
 		Entorno:   getEnv("APP_ENV", "dev"),
 		JWTSecret: getEnv("JWT_SECRET", ""),
 		JWTTTL:    2 * time.Hour,
+		StaticDir: getEnv("STATIC_DIR", ""),
 		CORSOrigins: getEnv("CORS_ORIGINS", "http://localhost:5173, http://localhost:5174, http://localhost:5175, "+
 			"http://127.0.0.1:5173, http://127.0.0.1:5174, http://127.0.0.1:5175"),
 		SimularFallaCheckout: GetEnvBool("SIMULAR_FALLA_CHECKOUT"),

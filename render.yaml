@@ -1,0 +1,27 @@
+# Blueprint de Render (https://render.com/docs/blueprint-spec): crea el servicio web y el Redis gratis.
+# La base de datos va en Neon (gratis y sin vencimiento): pega su cadena en DATABASE_URL.
+services:
+  - type: web
+    name: multicatalogo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false # se escribe a mano en el panel de Render (cadena de conexión de Neon)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_ENV
+        value: prod
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: multicatalogo-cache
+          property: connectionString
+
+  - type: keyvalue
+    name: multicatalogo-cache
+    plan: free
+    ipAllowList: [] # solo accesible desde los servicios de Render

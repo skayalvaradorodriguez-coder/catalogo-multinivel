@@ -198,6 +198,16 @@ React SPA (:5173) ──► Caddy/Nginx (U4: proxy inverso + SSL)
 - [x] `npm run lint` 0/0, `npm run build` sin advertencias; PROJECT_MAP y checklist al día
 - [x] Capturas de evidencia en el celular (diálogo de instalación, ícono instalado, modo avión, catálogo)
 
+## NUBE · Publicación gratuita con un solo link (ver DESPLIEGUE.md)
+
+- [x] Backend entrega la build del frontend (`STATIC_DIR`): SPA con fallback a `index.html`, 404 JSON en `/api/*`, encabezados de caché para `sw.js`, manifiesto y `/assets`
+- [x] Conexión por `DATABASE_URL` con SSL (Neon); en local sigue funcionando con `DB_*`
+- [x] `Dockerfile` único en la raíz (Node → Go → Alpine) y `render.yaml` (Blueprint: web Free + Key Value Free)
+- [x] Prueba local del modo producción: un servidor en :3000 con app + API, base nueva cargada solo con `init.sql`, login, compra, caché HIT, service worker activo
+- [ ] Base creada en Neon y `init.sql` ejecutado en su SQL Editor
+- [ ] Blueprint desplegado en Render y link `https://….onrender.com` verificado (login, compra, admin, instalar en el celular)
+- [ ] Link enviado al ingeniero
+
 ---
 
 # ROADMAP (fuera del alcance U1+U2)
