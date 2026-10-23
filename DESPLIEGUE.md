@@ -56,10 +56,10 @@ Luego en GitHub: **Compare & pull request → Create pull request → Merge pull
 
 1. Entra a **https://neon.tech** → *Sign up* → **Continuar con GitHub**.
 2. *Create project*: nombre `multicatalogo`, versión de Postgres **16 o 17**, región
-   **AWS US East (N. Virginia)** (la más cercana a Render Virginia). → *Create*.
+   **AWS Oeste de EE. UU. 2 (Oregón)** (la misma región que usa Render por defecto). → *Create*.
 3. En el panel, botón **Connect** → copia la **Connection string**. Se ve así:
    ```
-   postgresql://neondb_owner:XXXXXXXX@ep-algo-123456.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+   postgresql://neondb_owner:XXXXXXXX@ep-algo-123456.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
    ```
    Guárdala, es la **DATABASE_URL** (no la compartas: tiene la contraseña).
 4. Menú izquierdo **SQL Editor** → abre en tu computadora
