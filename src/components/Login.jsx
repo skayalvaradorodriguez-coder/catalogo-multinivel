@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
+import { useOnline } from "../hooks/useOnline";
+import BannerSinConexion from "./BannerSinConexion";
 import { iniciarSesion } from "../services/usuariosService";
 
 const Login = () => {
@@ -11,6 +13,7 @@ const Login = () => {
 
   const navigate = useNavigate();
   const { login, isAuthenticated, user } = useAuth();
+  const online = useOnline();
 
   // Si la sesión sigue guardada, no tiene sentido mostrar el login.
   if (isAuthenticated) {
@@ -35,7 +38,9 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4 py-8">
+    <div className="min-h-screen flex flex-col bg-slate-100">
+      <BannerSinConexion />
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
       <div className="max-w-md w-full bg-white rounded-xl shadow-md p-6 sm:p-8 border border-slate-200">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-slate-900">MultiCatálogo</h2>
@@ -50,9 +55,12 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Correo Electrónico</label>
+            <label htmlFor="login-email" className="block text-sm font-medium text-slate-700 mb-2">
+              Correo Electrónico
+            </label>
             <input
               type="email"
+              id="login-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition"
@@ -63,9 +71,12 @@ const Login = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña</label>
+            <label htmlFor="login-password" className="block text-sm font-medium text-slate-700 mb-2">
+              Contraseña
+            </label>
             <input
               type="password"
+              id="login-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition"
@@ -77,7 +88,7 @@ const Login = () => {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={!online || isLoading}
             className="w-full min-h-11 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isLoading ? "Ingresando..." : "Iniciar Sesión"}
@@ -100,6 +111,7 @@ const Login = () => {
             🛍️ Cliente: <span className="font-mono">cliente@upse.edu.ec / 123456</span>
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

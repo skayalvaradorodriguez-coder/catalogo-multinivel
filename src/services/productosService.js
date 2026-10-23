@@ -1,12 +1,13 @@
 // Catálogo público y administración de productos.
 import { apiFetch } from "./http";
 
-export const getProductos = (q) => apiFetch("/api/productos", { query: { q } });
+// Lecturas públicas (sin token): el service worker las guarda para verlas sin conexión.
+export const getProductos = (q) => apiFetch("/api/productos", { query: { q }, publico: true });
 
 // Devuelve undefined si el producto no existe o está desactivado (404).
 export const getProductoById = async (id) => {
   try {
-    return await apiFetch(`/api/productos/${id}`);
+    return await apiFetch(`/api/productos/${id}`, { publico: true });
   } catch (err) {
     if (err.status === 404) return undefined;
     throw err;

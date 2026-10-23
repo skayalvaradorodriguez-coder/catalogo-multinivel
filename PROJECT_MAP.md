@@ -19,24 +19,32 @@ React SPA (:5173) ──apiFetch + JWT──► Go/Fiber API (:3000, env PORT) �
 | `PROJECT_MAP.md` | Este archivo. Índice de navegación del proyecto. |
 | `REQUIREMENTS_CHECKLIST.md` | Estado por Unidad/Tema del sílabo (U1 SPA → U2 Go/Fiber → U3 → U4) + back-office. |
 | `PLAN_IMPLEMENTACION_U2.md` | Plan del profesor (fases 0-7 del back-office) con notas de cómo quedó en este repo. |
+| `PLAN_PWA.md` | Plan para convertir el frontend en PWA (fases PWA-0 a PWA-7): manifiesto, service worker, caché, offline, instalación, HTTPS. |
 | `ANALISIS_FUNCIONAL_U2.md` | Análisis de brecha funcional del profesor + estado de cada punto en este repo. |
 | `README.md` | Cómo instalar, migrar la base y correr el proyecto. |
 | `.windsurfrules` | Reglas del agente IA (ahorro de tokens, navegación, seguimiento). |
 
 ## Frontend (raíz del repo) — SPA
 
-Stack: React 19 + JavaScript + Vite 8 + Tailwind CSS 4 + React Router 7.
-Comandos: `npm run dev` (:5173) | `npm run build` | `npm run lint`.
-Config: `.env` con `VITE_API_URL` (ver `.env.example`; por defecto `http://localhost:3000`).
+Stack: React 19 + JavaScript + Vite 8 + Tailwind CSS 4 + React Router 7 + **PWA** (`vite-plugin-pwa` 2 / Workbox).
+Comandos: `npm run dev` (:5173) | `npm run build` | `npm run preview` (:4173, build + service worker) | `npm run lint` | `npm run generar-iconos`.
+Config: `.env` (ver `.env.example`): `VITE_API_URL` vacía = mismo origen; Vite reenvía `/api` a `VITE_PROXY_TARGET` (por defecto `http://127.0.0.1:3000`).
 
 | Ruta (`src/`) | Responsabilidad |
 |---|---|
-| `App.jsx` | Router; guardas `ProtectedRoute`/`AdminRoute`; `CartBoundary` (carrito por usuario). |
-| `config.js` | `API_URL` desde `import.meta.env.VITE_API_URL`. |
-| `services/http.js` | `apiFetch` único: Bearer automático, `ApiError{status,message,details}`, sesión en localStorage, 401 → cierra sesión. |
+| `index.html` | `lang="es"`, título, `description`, `theme-color`, íconos y etiquetas iOS. |
+| `vite.config.js` | Plugins (React, Tailwind, **VitePWA**: manifiesto, service worker, `runtimeCaching`) + proxy `/api` + `allowedHosts` de túneles. |
+| `pwa-assets.config.js` | Genera los íconos PNG desde `public/logo.svg`. |
+| `public/` | `logo.svg`, `pwa-*.png`, `maskable-icon-512x512.png`, `apple-touch-icon-180x180.png`, `favicon.ico`, `robots.txt`, `screenshots/` (capturas del manifiesto). |
+| `main.jsx` | Monta React; importa `pwa/instalacion.js` antes para capturar `beforeinstallprompt`. |
+| `App.jsx` | Router; guardas `ProtectedRoute`/`AdminRoute`; `CartBoundary` (carrito por usuario); `AvisoActualizacion`. |
+| `config.js` | `API_URL` desde `VITE_API_URL` (vacía = mismo origen, vía proxy). |
+| `services/http.js` | `apiFetch` único: Bearer automático (salvo `publico: true`), `ApiError{status,message,details}`, sesión en localStorage, 401 → cierra sesión, modo sin conexión, `borrarCacheDatos()` al salir. |
 | `services/*Service.js` | `productos` (público + admin), `red`, `checkout`, `pedidos`, `comisiones` (+ liquidaciones), `reportes`, `usuarios` (login/registro/admin). |
 | `hooks/useApi.js` | Llamada a la API con `{data, isLoading, error, recargar}`. |
 | `hooks/useRed.js` | Red del usuario (`GET /api/red/mia`). |
+| `hooks/useOnline.js` | `true`/`false` según la conexión (`useSyncExternalStore`). |
+| `hooks/useInstalarPWA.js` + `pwa/instalacion.js` | Estado de instalación (`disponible`/`ios`/`instalada`/`no`) y diálogo nativo. |
 | `context/AuthContext.jsx` | Sesión `{usuario, token}` persistida (`multicatalogo_sesion`). |
 | `context/CartContext.jsx` | Carrito por usuario en localStorage (`multicatalogo_carrito_<email>`). |
 | `data/productos.js` | Lista `categorias` (los productos vienen de la API). |
@@ -53,6 +61,9 @@ Config: `.env` con `VITE_API_URL` (ver `.env.example`; por defecto `http://local
 | `components/admin/AdminUsuarios.jsx` | `/admin/usuarios`: rol y activación de cuentas. |
 | `components/admin/AdminLiquidaciones.jsx` | `/admin/liquidaciones`: deuda por distribuidor + liquidar + historial. |
 | `components/Paginacion.jsx` `EstadoPedido.jsx` `MensajeError.jsx` | UI compartida. |
+| `components/BannerSinConexion.jsx` | Franja "Sin conexión" (Layout, Login, Registro). |
+| `components/AvisoActualizacion.jsx` | "Hay una nueva versión — Actualizar" / "Lista para usar sin conexión" (`useRegisterSW`). |
+| `components/InstalarApp.jsx` | Opción "Instalar app" del menú de perfil + pasos para iPhone. |
 | `components/Layout.jsx` `Navbar.jsx` `Sidebar.jsx` | Shell: menú por rol, perfil con mis pedidos / mi red / cerrar sesión. |
 
 ## multicatalogo-backend — API REST
@@ -86,6 +97,8 @@ Capas: `routes` (+ `middleware`) → `controllers` → `repository` / `cache` (i
 | `database/init.sql` | Instalación limpia: todas las tablas + seed (passwords con bcrypt). |
 | `database/002_checkout.sql` `003_seguridad.sql` `004_backoffice.sql` | Migraciones idempotentes para una base existente (aplicar en orden). |
 | `docker-compose.yml` `Dockerfile` | Postgres 16 + Redis + backend con healthchecks. |
+| `routes/frontend.go` | `ServirFrontend`: con `STATIC_DIR` el backend entrega también la app React (SPA + PWA). |
+| `../Dockerfile` `../render.yaml` | Imagen única (frontend + backend) y Blueprint de Render para la nube — ver `DESPLIEGUE.md`. |
 | `.env` (gitignored) / `.env.example` | `PORT`, `APP_ENV`, `JWT_SECRET`, `DB_*`, `REDIS_*`, simulación de fallas. |
 
 ## Endpoints
@@ -123,3 +136,11 @@ Capas: `routes` (+ `middleware`) → `controllers` → `repository` / `cache` (i
 - Caché: `productos:all` (5 min), `red:tree:{email}` y `red:tree:global` (10 min). Checkout, cancelación y registro borran `red:tree:*`; las escrituras de productos borran `productos:all`. Sin Redis, la API consulta PostgreSQL y `/api/health` responde `degraded`.
 - Goroutine tras el COMMIT: suma `ventas` del nodo del comprador, invalida caché y "envía" el correo (log). El ledger ya quedó escrito en la transacción.
 - Demostración ACID: `SIMULAR_FALLA_CHECKOUT=true` o `CHECKOUT_PAUSA_SEGUNDOS=N` en `.env` (reiniciar el backend).
+
+## PWA
+
+- Cachés del service worker: `workbox-precache-*` (app shell), `multicatalogo-api-productos` (GET de catálogo **sin token**, StaleWhileRevalidate 24 h), `multicatalogo-imagenes` (CacheFirst 30 días), `multicatalogo-estaticos`.
+- Nunca se cachean: login, registro, checkout, escrituras ni rutas privadas/admin (no coinciden con ninguna regla → red directa).
+- Cerrar sesión o un 401 borra `multicatalogo-api-*`.
+- `registerType: "prompt"` + `clientsClaim`: la primera visita queda controlada al instante; las versiones nuevas esperan a "Actualizar".
+- El service worker solo funciona en `localhost`/`127.0.0.1` o HTTPS: para el celular usar el túnel del README.

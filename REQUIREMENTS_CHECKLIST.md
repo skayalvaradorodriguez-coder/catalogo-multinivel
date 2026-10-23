@@ -25,9 +25,9 @@
 
 | Ítem | Valor |
 |---|---|
-| **Hito actual** | **Unidades 1 y 2 completadas** + back-office del plan `PLAN_IMPLEMENTACION_U2.md` (fases 0-7) |
-| **Última tarea completada** | Seguridad U2-T4 (bcrypt + JWT + RequireAuth/RequireAdmin + identidad por token) y back-office: registro con referido, CRUD productos, pedidos con estados, ledger de comisiones, liquidaciones, reportes, paginación (2026-10-19) |
-| **Siguiente tarea pendiente** | U3-T1: scaffold FastAPI (capa SaaS) cuando el profesor la publique |
+| **Hito actual** | **Unidades 1 y 2 completadas** + back-office (`PLAN_IMPLEMENTACION_U2.md`) + **PWA completa** (`PLAN_PWA.md`, PWA-0 a PWA-7, probada en Android) |
+| **Última tarea completada** | PWA: manifiesto, íconos, service worker, caché del catálogo, modo sin conexión, aviso de actualización, botón instalar, limpieza de caché al salir, proxy `/api` (2026-10-22) |
+| **Siguiente tarea pendiente** | U3-T1: scaffold FastAPI (capa SaaS) cuando el profesor la publique · opcional: probar la PWA en un iPhone |
 | **Bloqueadores** | Ninguno |
 
 ## Arquitectura objetivo del semestre
@@ -123,6 +123,90 @@ React SPA (:5173) ──► Caddy/Nginx (U4: proxy inverso + SSL)
 
 - [x] `go test ./...` — `domain` (reparto 10/5/2 %, redondeo, transiciones de estado) y `seguridad` (JWT válido/adulterado/otra clave/vencido, bcrypt)
 - [x] `npm run lint` (0/0) y `npm run build`
+
+---
+
+# PWA — APLICACIÓN WEB PROGRESIVA (PLAN_PWA.md)
+
+> Convierte el frontend en una app **instalable** que abre **sin conexión** y avisa de
+> versiones nuevas. Herramienta: `vite-plugin-pwa` 2.x (Workbox). El backend no cambia.
+> Regla de privacidad: nunca se cachean datos con token ni peticiones de escritura.
+
+## PWA-0 · Identidad visual y metadatos
+
+- [x] Logo propio `public/logo.svg` (reemplaza el `favicon.svg` de Vite)
+- [x] Íconos PNG 192, 512, maskable 512, apple-touch 180 y `favicon.ico` (`@vite-pwa/assets-generator`)
+- [x] `index.html`: `lang="es"`, título "MultiCatálogo", `description`, `theme-color`, etiquetas iOS
+- [x] Borrar assets de plantilla sin uso (`react.svg`, `vite.svg`, `icons.svg`)
+
+## PWA-1 · Manifiesto web
+
+- [x] `vite-plugin-pwa` instalado y registrado en `vite.config.js`
+- [x] Manifiesto: nombre, `lang: es`, `start_url`/`scope` "/", `display: standalone`, colores, categorías
+- [x] Íconos 192/512/maskable en el manifiesto
+- [x] Atajos: Catálogo, Mis Pedidos, Mi Red
+- [x] Capturas vertical y horizontal para el diálogo de instalación
+- [x] Verificado: DevTools → Application → Manifest sin errores
+
+## PWA-2 · Service worker y app shell
+
+- [x] `generateSW` con `registerType: "prompt"` y precache de la build
+- [x] `navigateFallback: /index.html` (rutas de React Router sin red) y `navigateFallbackDenylist: /api/`
+- [x] `cleanupOutdatedCaches` y `devOptions` para probar en desarrollo
+- [x] Verificado: con DevTools en Offline, `/catalogo` abre tras recargar
+
+## PWA-3 · Estrategias de caché
+
+- [x] `GET /api/productos[/:id]` → StaleWhileRevalidate (50 entradas, 24 h)
+- [x] Imágenes de productos → CacheFirst (200 entradas, 30 días)
+- [x] Login, registro, checkout, escrituras y rutas privadas/admin → NetworkOnly
+- [x] Cachés con prefijo `multicatalogo-`
+- [x] Verificado: catálogo e imágenes visibles offline; Cache Storage sin pedidos, red, comisiones ni admin
+
+## PWA-4 · Experiencia sin conexión
+
+- [x] Hook `useOnline` + `BannerSinConexion` en el `Layout`
+- [x] `apiFetch` devuelve "Sin conexión..." sin intentar la petición
+- [x] Checkout bloqueado offline (el carrito se conserva)
+- [x] Mensaje "Necesitas conexión" en Mis Pedidos, Mi Red, admin, login y registro
+- [x] Verificado: Offline → banner, catálogo y carrito funcionan; Online → banner desaparece
+
+## PWA-5 · Actualizaciones e instalación
+
+- [x] `AvisoActualizacion` ("Hay una nueva versión — Actualizar") con `useRegisterSW`
+- [x] Revisión de actualizaciones cada 60 min
+- [x] Botón "Instalar app" (`beforeinstallprompt`), oculto si ya está instalada
+- [x] Instrucciones para iPhone (Compartir → Agregar a pantalla de inicio)
+- [x] `safe-area-inset` en Navbar/Sidebar para el modo instalado
+- [x] Verificado: nueva build → aviso → carga la versión nueva; la app se instala en escritorio
+
+## PWA-6 · Seguridad, privacidad y HTTPS
+
+- [x] Cerrar sesión / 401 borra las cachés de API (`caches.delete`)
+- [x] Ninguna regla de caché coincide con peticiones con `Authorization`
+- [x] Proxy de Vite `/api → 127.0.0.1:3000`: mismo origen, sin CORS ni contenido mixto
+- [x] HTTPS para el celular con túnel (`npx cloudflared tunnel --url http://localhost:4173`) documentado en `README.md`
+- [x] Verificado: tras cerrar sesión Cache Storage queda sin datos; la app se instala en el celular por HTTPS
+
+## PWA-7 · Verificación final y documentación
+
+- [x] Application: manifiesto OK, service worker activo, app instalable
+- [x] Lighthouse ≥ 90 en Performance, Accessibility, Best Practices y SEO (build de producción)
+- [x] Prueba real en Android (Chrome) por túnel HTTPS: instalación con diálogo enriquecido (descripción + captura), ícono en la pantalla de inicio, app abierta en modo avión con banner "Sin conexión" y catálogo con fotos (2026-10-22)
+- [ ] Prueba en iPhone (Safari) — opcional, si se dispone de uno
+- [x] Prueba de privacidad con dos usuarios en el mismo navegador
+- [x] `npm run lint` 0/0, `npm run build` sin advertencias; PROJECT_MAP y checklist al día
+- [x] Capturas de evidencia en el celular (diálogo de instalación, ícono instalado, modo avión, catálogo)
+
+## NUBE · Publicación gratuita con un solo link (ver DESPLIEGUE.md)
+
+- [x] Backend entrega la build del frontend (`STATIC_DIR`): SPA con fallback a `index.html`, 404 JSON en `/api/*`, encabezados de caché para `sw.js`, manifiesto y `/assets`
+- [x] Conexión por `DATABASE_URL` con SSL (Neon); en local sigue funcionando con `DB_*`
+- [x] `Dockerfile` único en la raíz (Node → Go → Alpine) y `render.yaml` (Blueprint: web Free + Key Value Free)
+- [x] Prueba local del modo producción: un servidor en :3000 con app + API, base nueva cargada solo con `init.sql`, login, compra, caché HIT, service worker activo
+- [ ] Base creada en Neon y `init.sql` ejecutado en su SQL Editor
+- [ ] Blueprint desplegado en Render y link `https://….onrender.com` verificado (login, compra, admin, instalar en el celular)
+- [ ] Link enviado al ingeniero
 
 ---
 

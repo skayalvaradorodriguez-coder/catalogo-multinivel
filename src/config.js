@@ -1,2 +1,3 @@
-// URL base del backend en Go. Se configura con VITE_API_URL en el archivo .env (ver .env.example).
-export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+// URL base del backend. Vacía (recomendado) = mismo origen que la app: el navegador llama a /api
+// y Vite lo reenvía al backend en Go (proxy en vite.config.js). Se configura con VITE_API_URL en .env.
+export const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");

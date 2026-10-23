@@ -67,6 +67,12 @@ func main() {
 	// 4. Rutas con los controladores ya inyectados y los middlewares de seguridad.
 	routes.SetupRoutes(app, ctl, cfg.JWTSecret)
 
+	// En la nube el mismo servidor entrega también el frontend (SPA + PWA).
+	if cfg.StaticDir != "" {
+		routes.ServirFrontend(app, cfg.StaticDir)
+		log.Printf("Sirviendo el frontend desde %s", cfg.StaticDir)
+	}
+
 	// Ctrl+C: apagado ordenado para que se ejecuten los defer que cierran Redis y PostgreSQL.
 	go func() {
 		senal := make(chan os.Signal, 1)
